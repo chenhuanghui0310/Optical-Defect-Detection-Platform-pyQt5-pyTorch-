@@ -1,0 +1,12 @@
+# Dataset config for the main defect-detection model.
+# This file is intentionally isolated in dl_main_model_yolo/ for easy tuning.
+path: ../dataset
+train: images/train
+val: images/val
+
+names:
+  0: scratch
+  1: bump
+  2: dent
+  3: dust
+  4: hair

@@ -1,0 +1,14 @@
+# Dataset config for using Final_Dataset as source
+# 只需保证 images/Final_Dataset 下图片和 labels/Final_Dataset 下标签一一对应
+# 推荐用 8:2 划分训练/验证集
+
+path: ../dataset
+train: images/Final_Dataset
+val: images/Final_Dataset  # 若需严格验证集，可手动分文件夹
+
+names:
+  0: scratch
+  1: bump
+  2: dent
+  3: dust
+  4: hair
