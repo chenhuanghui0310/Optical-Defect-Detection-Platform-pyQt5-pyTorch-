@@ -15,7 +15,7 @@ def get_default_model_path() -> Path:
         / "dl_main_model_yolo"
         / "runs"
         / "train"
-        / "yolo11s_final_split2"
+        / "yolo11s_final_split3"
         / "weights"
         / "best.pt"
     )
@@ -98,12 +98,17 @@ class DefectAIService:
                 cls_id = int(box.cls.item())
                 label = str(names.get(cls_id, f"class_{cls_id}"))
                 coords = box.xyxy[0].tolist() if hasattr(box, 'xyxy') else None
+                conf_val = float(box.conf.item())
+                # TODO 4.1：过滤低置信度结果，避免把不确定的猜测当作检测结果输出
+                # 35% 以下视为未检测到，防止出现 29% 置信度的误判
+                if conf_val < 0.35:
+                    continue
                 predictions.append(
                     DefectPrediction(
                         cls_id=cls_id,
                         label=label,
                         label_cn=self._label_to_cn(label),
-                        confidence=float(box.conf.item()),
+                        confidence=conf_val,
                         bbox_xyxy=coords,
                     )
                 )

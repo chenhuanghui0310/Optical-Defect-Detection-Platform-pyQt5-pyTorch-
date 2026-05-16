@@ -536,9 +536,12 @@ class SimulationParameters:
         screen_length_x = self.screen_length_x
         screen_length_y = self.screen_length_y
 
-        # 移除额外的可视化增益和物理限制，以保证与其他瑕疵（如表面划痕）的干涉条纹表现一致。
+        # 加入可视化增益，确保 0.01μm 级别的小突起/小凹陷在干涉图中产生足够明显的条纹畸变。
+        # visibility_gain=15 使 0.01μm → 0.15μm 的等效扰动，对应约 3.2 rad 相位变化，
+        # 足以产生可见的条纹弯曲，同时上限 2.0μm 防止过度失真。
         base_depth_raw = self.bump_height * 1e-6
-        base_depth = base_depth_raw
+        visibility_gain = 15.0
+        base_depth = float(np.clip(base_depth_raw * visibility_gain, 0.02e-6, 2.0e-6))
 
         if bump_type == "突起":
             depth_sign = -1.0

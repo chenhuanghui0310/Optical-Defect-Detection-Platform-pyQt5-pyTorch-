@@ -62,9 +62,16 @@ def defect_to_cls(defect_type: str) -> int:
 
 def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int]]:
     samples = []
+    skipped_unknown = 0
     for json_path in sorted(source_dir.glob("*_参数.json")):
         with json_path.open("r", encoding="utf-8") as f:
             meta = json.load(f)
+
+        # TODO 3.1：过滤旧版数据（sim_type=unknown 的样本格式不一致，会污染训练集）
+        sim_type = meta.get("sim_type", "unknown")
+        if sim_type == "unknown":
+            skipped_unknown += 1
+            continue
 
         defect_type = meta.get("defect_type")
         if not defect_type:
@@ -82,6 +89,9 @@ def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int]]:
             continue
 
         samples.append((image_path, ideal_path, cls_id))
+
+    if skipped_unknown > 0:
+        print(f"  [INFO] 跳过 {skipped_unknown} 个旧版样本（sim_type=unknown）")
     return samples
 
 
@@ -134,20 +144,21 @@ def generate_yolo_labels(defect_img_path: Path, ideal_img_path: Path, cls_id: in
             write_weak_label(label_path, cls_id)
             return
 
-        # 智能提取绘图区（Axes）：过滤标题变长导致的图像挤压错位
+        # 智能提取绘图区（Axes）：兼容有/无坐标轴标签的图像
         def find_plot_bbox(img):
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             mask = (gray < 80).astype(np.uint8)
             h, w = gray.shape
             row_sums = np.sum(mask, axis=1)
             col_sums = np.sum(mask, axis=0)
-            
+
             # 黑框脊线长度至少占 40%
             row_peaks = np.where(row_sums > w * 0.4)[0]
             col_peaks = np.where(col_sums > h * 0.4)[0]
-            
+
             if len(row_peaks) >= 2 and len(col_peaks) >= 2:
                 return col_peaks[0], row_peaks[0], col_peaks[-1], row_peaks[-1]
+            # 无明显边框时（无坐标轴的纯净图），直接使用全图
             return 0, 0, w, h
             
         x1_d, y1_d, x2_d, y2_d = find_plot_bbox(defect_img)
@@ -167,31 +178,36 @@ def generate_yolo_labels(defect_img_path: Path, ideal_img_path: Path, cls_id: in
         diff = cv2.absdiff(defect_plot, ideal_plot_resized)
         gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
         
-        # 降低二值化阈值，为了捕捉到小突起和小凹陷引起的微小条纹畸变(相位移动)
-        _, thresh = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
-        
-        # 形态学操作：先连接相近的断裂差异区域
-        kernel_close = np.ones((20, 20), np.uint8)
+        # 降低二值化阈值，捕捉小突起和小凹陷引起的微小条纹畸变
+        _, thresh = cv2.threshold(gray, 8, 255, cv2.THRESH_BINARY)
+
+        # 根据图像尺寸自适应形态学核大小
+        # 牛顿环图像约 750×750，劈尖图像约 750×375，核大小按比例缩放
+        img_short = min(defect_img.shape[:2])
+        # 闭运算：连接断裂的差异区域，核大小约为图像短边的 1.5%
+        close_k = max(5, int(img_short * 0.015))
+        kernel_close = np.ones((close_k, close_k), np.uint8)
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel_close)
-        
-        # 较大扩张，为了将条纹畸变的周边正常条纹也包含进瑕疵框，提供更多上下文供YOLO区分凹凸方向
-        kernel_dilate = np.ones((30, 30), np.uint8)
+
+        # 膨胀：适度扩大检测区域，核大小约为图像短边的 2%（比之前的 30×30 小很多）
+        dilate_k = max(6, int(img_short * 0.02))
+        kernel_dilate = np.ones((dilate_k, dilate_k), np.uint8)
         thresh = cv2.dilate(thresh, kernel_dilate, iterations=1)
-        
+
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
+
         h_d, w_d = defect_img.shape[:2]
         labels = []
         for c in contours:
             x, y, w, h = cv2.boundingRect(c)
-            # 过滤极小的干扰噪点
-            if w > 8 and h > 8:
+            # 过滤极小的干扰噪点（面积过滤更可靠）
+            if w > 6 and h > 6 and w * h > 100:
                 # 映射回原图坐标
                 x_full = x + x1_d
                 y_full = y + y1_d
-                
-                # 给瑕疵框明显的留白（Padding），对于判断光干涉边缘的曲向(小凸起和小凹陷)极其重要
-                padding = 24
+
+                # 适度留白：约为图像短边的 1%，比之前的固定 24px 更合理
+                padding = max(8, int(img_short * 0.01))
                 bx1 = max(0, x_full - padding)
                 by1 = max(0, y_full - padding)
                 bx2 = min(w_d, x_full + w + padding)

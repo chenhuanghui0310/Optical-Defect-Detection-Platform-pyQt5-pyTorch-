@@ -368,21 +368,41 @@ class DatasetGenerator:
             params.use_manual_scratches = False
             params.bump_count = np.random.randint(1, 8)
             if sim_type == "newton":
-                # 牛顿环的视场约 6mm，突起应该很小
-                # 提高0.01um级小尺寸样本比例至60%
-                if np.random.random() < 0.60:
-                    params.bump_height = np.random.uniform(0.01, 0.08)  # 0.01um级小尺寸
+                # TODO 1.1 & 1.5：牛顿环小凸起
+                # 高度：60% 小尺寸(0.01~0.1μm)，40% 覆盖到控制面板上限 5.0μm
+                r_h = np.random.random()
+                if r_h < 0.60:
+                    params.bump_height = np.random.uniform(0.01, 0.10)   # 小尺寸
+                elif r_h < 0.80:
+                    params.bump_height = np.random.uniform(0.10, 1.0)    # 中等
                 else:
-                    params.bump_height = np.random.uniform(0.08, 0.5)
-                params.bump_radius_mm = np.random.uniform(0.2, 0.6)
+                    params.bump_height = np.random.uniform(1.0, 5.0)     # 大尺寸（覆盖控制面板上限）
+                # 半径：三段分层覆盖 0.15~2.88mm（2.88mm = 视场6mm × 48%，clip上限）
+                r_r = np.random.random()
+                if r_r < 0.40:
+                    params.bump_radius_mm = np.random.uniform(0.15, 0.8)   # 小半径
+                elif r_r < 0.75:
+                    params.bump_radius_mm = np.random.uniform(0.8, 1.8)    # 中半径
+                else:
+                    params.bump_radius_mm = np.random.uniform(1.8, 2.88)   # 大半径（接近clip上限）
             else:
-                # 劈尖的视场约 30mm，突起可以适当大些
-                # 提高0.01um级小尺寸样本比例至60%
-                if np.random.random() < 0.60:
-                    params.bump_height = np.random.uniform(0.01, 0.08)  # 0.01um级小尺寸
+                # TODO 1.3 & 1.5：劈尖小凸起
+                # 高度：60% 小尺寸，40% 覆盖到 5.0μm
+                r_h = np.random.random()
+                if r_h < 0.60:
+                    params.bump_height = np.random.uniform(0.01, 0.10)
+                elif r_h < 0.80:
+                    params.bump_height = np.random.uniform(0.10, 1.0)
                 else:
-                    params.bump_height = np.random.uniform(0.08, 0.8)
-                params.bump_radius_mm = np.random.uniform(1.2, 2.5)
+                    params.bump_height = np.random.uniform(1.0, 5.0)
+                # 半径：三段分层覆盖 0.5~7.0mm（控制面板上限）
+                r_r = np.random.random()
+                if r_r < 0.35:
+                    params.bump_radius_mm = np.random.uniform(0.5, 2.0)    # 小半径
+                elif r_r < 0.70:
+                    params.bump_radius_mm = np.random.uniform(2.0, 4.5)    # 中半径
+                else:
+                    params.bump_radius_mm = np.random.uniform(4.5, 7.0)    # 大半径（覆盖控制面板上限）
 
             params.bump_position_mode = np.random.choice(["网格排列", "随机分布", "固定位置"])
 
@@ -390,21 +410,39 @@ class DatasetGenerator:
             params.use_manual_scratches = False
             params.bump_count = np.random.randint(1, 8)
             if sim_type == "newton":
-                # 牛顿环的视场约 6mm，凹陷更平缓但比突起宽一点
-                # 提高0.01um级小尺寸样本比例至60%
-                if np.random.random() < 0.60:
-                    params.bump_height = np.random.uniform(0.01, 0.08)  # 0.01um级小尺寸
+                # TODO 1.2 & 1.5：牛顿环小凹陷
+                r_h = np.random.random()
+                if r_h < 0.60:
+                    params.bump_height = np.random.uniform(0.01, 0.10)
+                elif r_h < 0.80:
+                    params.bump_height = np.random.uniform(0.10, 1.0)
                 else:
-                    params.bump_height = np.random.uniform(0.08, 0.4)
-                params.bump_radius_mm = np.random.uniform(0.4, 0.8)
+                    params.bump_height = np.random.uniform(1.0, 5.0)
+                # 半径：三段分层覆盖 0.2~2.88mm
+                r_r = np.random.random()
+                if r_r < 0.40:
+                    params.bump_radius_mm = np.random.uniform(0.2, 0.9)
+                elif r_r < 0.75:
+                    params.bump_radius_mm = np.random.uniform(0.9, 1.9)
+                else:
+                    params.bump_radius_mm = np.random.uniform(1.9, 2.88)
             else:
-                # 劈尖的视场约 30mm，凹陷通常面积会大一点（显得更平缓）
-                # 提高0.01um级小尺寸样本比例至60%
-                if np.random.random() < 0.60:
-                    params.bump_height = np.random.uniform(0.01, 0.08)  # 0.01um级小尺寸
+                # TODO 1.4 & 1.5：劈尖小凹陷
+                r_h = np.random.random()
+                if r_h < 0.60:
+                    params.bump_height = np.random.uniform(0.01, 0.10)
+                elif r_h < 0.80:
+                    params.bump_height = np.random.uniform(0.10, 1.0)
                 else:
-                    params.bump_height = np.random.uniform(0.08, 0.5)
-                params.bump_radius_mm = np.random.uniform(2.0, 3.8)
+                    params.bump_height = np.random.uniform(1.0, 5.0)
+                # 半径：三段分层覆盖 0.5~7.0mm
+                r_r = np.random.random()
+                if r_r < 0.35:
+                    params.bump_radius_mm = np.random.uniform(0.5, 2.0)
+                elif r_r < 0.70:
+                    params.bump_radius_mm = np.random.uniform(2.0, 4.5)
+                else:
+                    params.bump_radius_mm = np.random.uniform(4.5, 7.0)
             params.bump_position_mode = np.random.choice(["网格排列", "随机分布", "固定位置"])
 
         elif defect_type == "灰尘污染":
@@ -420,8 +458,8 @@ class DatasetGenerator:
             params.defect_type = "头发丝遮挡"
             params.hair_count = np.random.randint(1, 6)
 
-        # 光学参数微调：覆盖更广的波长范围，与平台默认值（589nm）更接近
-        params.lambda_nm = np.random.randint(550, 700)
+        # 光学参数微调：覆盖可见光范围，包含平台默认值 589nm（黄光）
+        params.lambda_nm = np.random.randint(520, 700)
         
         if sim_type == "newton":
             params.R_mm = np.random.uniform(800.0, 1500.0)
@@ -491,6 +529,8 @@ class DatasetGenerator:
 
     def _save_interference_image(self, pattern, filepath, title, cmap, sim_type="wedge"):
         """保存干涉图（与平台风格一致）"""
+        # TODO 1.6：dpi 统一为 150，figsize=(5,5) for newton / (7,3.5) for wedge
+        # 输出尺寸：牛顿环 750×750，劈尖 1050×525，与平台 save_figure 一致
         fig, ax = plt.subplots(figsize=(7, 3.5) if sim_type == "wedge" else (5, 5), dpi=100)
         fig.set_facecolor('#FFFFFF')
 

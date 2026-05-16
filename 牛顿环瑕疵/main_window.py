@@ -4,12 +4,13 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget,
                              QVBoxLayout, QHBoxLayout, QLabel,
-                             QMessageBox, QFileDialog)
+                             QMessageBox, QFileDialog, QAction)
 from PyQt5.QtCore import Qt, QTimer
 
 from parameters import SimulationParameters
 from control_panel import ControlPanel
 from simulation_widgets import ImageContainer
+from defect_inference import DefectInferenceEngine
 import numpy as np
 
 class DefectInterferenceWindow(QMainWindow):
@@ -43,6 +44,9 @@ class DefectInterferenceWindow(QMainWindow):
 
         # 初始化参数
         self.params = SimulationParameters()
+        
+        # 初始化AI推理引擎
+        self.inference_engine = DefectInferenceEngine()
 
         # 当前缩放因子
         self.scale_factor = 1.0
@@ -106,6 +110,103 @@ class DefectInterferenceWindow(QMainWindow):
         # 右侧图像显示区域
         self.image_container = ImageContainer(self.params)
         content_layout.addWidget(self.image_container, 1)
+
+        # AI检测菜单
+        self.create_ai_menu()
+
+    def create_ai_menu(self):
+        """创建AI检测菜单，支持切换模型与外部图片检测。"""
+        ai_menu = self.menuBar().addMenu("AI检测")
+
+        select_model_action = QAction("选择模型权重...", self)
+        select_model_action.triggered.connect(self.select_model_weight)
+        ai_menu.addAction(select_model_action)
+
+        detect_external_action = QAction("检测外部图片...", self)
+        detect_external_action.triggered.connect(self.detect_external_image)
+        ai_menu.addAction(detect_external_action)
+
+    def show_styled_info(self, title, text):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+
+    def show_styled_warning(self, title, text):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle(title)
+        msg.setText(text)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+
+    def select_model_weight(self):
+        """手动选择YOLO权重文件。"""
+        try:
+            file_name, _ = QFileDialog.getOpenFileName(
+                self,
+                "选择模型权重",
+                str(self.inference_engine.model_path.parent),
+                "PyTorch权重 (*.pt);;所有文件 (*)",
+            )
+            if not file_name:
+                return
+
+            self.inference_engine.set_model_path(file_name)
+            self.statusBar().showMessage(f"已切换模型: {file_name}")
+            self.show_styled_info("模型已切换", f"当前模型路径:\n{file_name}")
+        except Exception as e:
+            print(f"切换模型错误: {e}")
+            self.show_styled_warning("切换失败", f"模型切换失败:\n{e}")
+
+    def detect_external_image(self):
+        """选择任意外部图片并执行检测。"""
+        try:
+            image_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "选择待检测图片",
+                "",
+                "图片文件 (*.png *.jpg *.jpeg *.bmp);;所有文件 (*)",
+            )
+            if not image_path:
+                return
+
+            detection_text = self.run_defect_detection(image_path)
+            self.show_styled_info(
+                "外部图片检测结果",
+                f"图片路径:\n{image_path}\n\n{detection_text}",
+            )
+        except Exception as e:
+            print(f"外部图片检测错误: {e}")
+            self.show_styled_warning("检测失败", f"外部图片检测失败:\n{e}")
+
+    def run_defect_detection(self, defect_image_path):
+        """保存后自动运行YOLO检测，并在干涉图上高亮显示。"""
+        try:
+            result = self.inference_engine.predict_image(defect_image_path)
+            predictions = result.get("predictions", [])
+            output_image = result.get("output_image", "")
+
+            # 通知 UI 展示包含检测框的高亮结果图片
+            if hasattr(self, "image_container") and output_image:
+                self.image_container.show_ai_result_image(output_image)
+
+            if predictions:
+                top_pred = predictions[0]
+                label_cn = top_pred.get("label_cn", top_pred.get("label", "未知"))
+                conf = float(top_pred.get("confidence", 0.0))
+                self.statusBar().showMessage(f"检测完成 - 类型: {label_cn}，置信度: {conf:.2%}")
+                return f"预测类型: {label_cn}\n置信度: {conf:.2%}\n"
+            else:
+                self.statusBar().showMessage("检测完成 - 未检测到明显目标")
+                return f"未检测到明显目标\n"
+
+        except Exception as e:
+            print(f"自动检测错误: {e}")
+            self.statusBar().showMessage("检测失败，请检查模型路径或环境")
+            return f"检测失败: {e}"
 
     def changeEvent(self, event):
         """处理窗口状态变化（包括全屏切换）"""
@@ -539,6 +640,11 @@ class DefectInterferenceWindow(QMainWindow):
                 ideal_filename, defect_filename, topography_filename = self.image_container.save_figures(fileName)
 
                 if ideal_filename and topography_filename:
+                    # 运行 AI 检测
+                    detection_text = ""
+                    if defect_filename:
+                        detection_text = self.run_defect_detection(defect_filename)
+
                     # 显示保存成功消息
                     detail_lines = [
                         f"1. 理想干涉图: {ideal_filename}",
@@ -547,6 +653,9 @@ class DefectInterferenceWindow(QMainWindow):
                     if defect_filename:
                         detail_lines.insert(1, f"2. 有瑕疵干涉图: {defect_filename}")
                         detail_lines[2] = f"3. 三维光强分布图: {topography_filename}"
+
+                    if detection_text:
+                        detail_lines.append(f"\nAI 检测结果:\n{detection_text}")
 
                     QMessageBox.information(
                         self, "保存成功",

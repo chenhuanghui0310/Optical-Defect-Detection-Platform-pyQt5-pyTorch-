@@ -127,25 +127,13 @@ def parse_args() -> argparse.Namespace:
 def run_validation(weights: str, data: str, split: str, device: str, imgsz: int):
     """运行 YOLO 验证并返回指标字典"""
     model = YOLO(weights)
+    # plots=False：跳过 ultralytics 自动绘图，避免模型类别数与 yaml 不一致时的 KeyError
+    val_kwargs = dict(data=data, imgsz=imgsz, split=split, verbose=False, plots=False)
     try:
-        metrics = model.val(
-            data=data,
-            imgsz=imgsz,
-            device=device,
-            split=split,
-            verbose=False,
-            plots=True,
-        )
+        metrics = model.val(device=device, **val_kwargs)
     except Exception:
         # GPU 失败时回退 CPU
-        metrics = model.val(
-            data=data,
-            imgsz=imgsz,
-            device="cpu",
-            split=split,
-            verbose=False,
-            plots=True,
-        )
+        metrics = model.val(device="cpu", **val_kwargs)
     return metrics
 
 
@@ -308,7 +296,7 @@ def format_report(
             lines.append(f"    建议：针对 {worst_cls[0]} 类别增加训练样本，特别是0.01μm小尺寸样本。")
 
     lines.append("")
-    lines.append("  • 混淆矩阵和PR曲线图已保存至可视化结果目录，可直接插入实验报告。")
+    lines.append("  • 如需混淆矩阵和PR曲线图，可在训练完成后查看 runs/train/ 目录下的结果图。")
     lines.append("")
 
     # ── 五、JSON 数据摘要 ────────────────────────────────────────

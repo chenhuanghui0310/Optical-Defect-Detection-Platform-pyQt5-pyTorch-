@@ -65,6 +65,10 @@ class SpectrumPlot(FigureCanvas):
 
     def update_plot(self, pattern, title, lamda, is_defect=False):
         """更新单个干涉图像"""
+        # 缓存数据，供 save_figure 以训练集一致格式保存
+        self._last_pattern = pattern
+        self._last_title = title
+        self._last_lamda = lamda
         # 清除子图
         self.ax.clear()
 
@@ -93,8 +97,28 @@ class SpectrumPlot(FigureCanvas):
         self.draw()
 
     def save_figure(self, filename):
-        """保存图像到文件"""
-        self.fig.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
+        """保存图像到文件。
+        使用与训练数据集一致的参数（figsize=(5,5), dpi=150，无标题无刻度），
+        确保 YOLO 模型能正确识别平台保存的图片。
+        """
+        import matplotlib.pyplot as _plt
+        import numpy as _np
+
+        if hasattr(self, '_last_pattern') and self._last_pattern is not None:
+            cmap = self.get_color_mapping(self._last_lamda)
+            # TODO 2.1：dpi=150，与训练数据 _save_interference_image(dpi=150) 一致
+            fig2, ax2 = _plt.subplots(figsize=(5, 5), dpi=150)
+            fig2.set_facecolor('#FFFFFF')
+            ax2.imshow(self._last_pattern, extent=[-3, 3, -3, 3],
+                       cmap=cmap, origin='lower', aspect='equal')
+            # 与训练数据集保持一致：无标题、无坐标轴标签、无刻度数值
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            _plt.tight_layout(pad=0)
+            fig2.savefig(filename, dpi=150, bbox_inches='tight', facecolor='white')
+            _plt.close(fig2)
+        else:
+            self.fig.savefig(filename, dpi=150, bbox_inches='tight', facecolor='white')
 
 
 class Intensity3DPlot(FigureCanvas):
@@ -762,7 +786,23 @@ class ImageContainer(QWidget):
         self.simulation_tab = SimulationTab(self.params)
         self.tab_widget.addTab(self.simulation_tab, "仿真结果")
 
+        # AI检测结果标签页
+        self.ai_result_label = QLabel("暂无检测结果\n请点击“保存图片”或“检测外部图片”以运行检测")
+        self.ai_result_label.setAlignment(Qt.AlignCenter)
+        self.ai_result_label.setScaledContents(True)
+        self.tab_widget.addTab(self.ai_result_label, "AI 检测结果")
+
         layout.addWidget(self.tab_widget)
+
+    def show_ai_result_image(self, img_path: str):
+        """显示 AI 推理后的结果图像"""
+        from PyQt5.QtGui import QPixmap
+        pixmap = QPixmap(img_path)
+        if not pixmap.isNull():
+            self.ai_result_label.setPixmap(pixmap)
+            # 自动切换到 AI 结果标签页
+            if self.tab_widget.indexOf(self.ai_result_label) != -1:
+                self.tab_widget.setCurrentWidget(self.ai_result_label)
 
     def get_simulation_tab(self):
         """获取仿真结果标签页"""
