@@ -67,7 +67,7 @@ def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int]]:
         with json_path.open("r", encoding="utf-8") as f:
             meta = json.load(f)
 
-        # TODO 3.1：过滤旧版数据（sim_type=unknown 的样本格式不一致，会污染训练集）
+        # 过滤旧版数据（sim_type=unknown 的样本格式不一致，会污染训练集）
         sim_type = meta.get("sim_type", "unknown")
         if sim_type == "unknown":
             skipped_unknown += 1
@@ -79,8 +79,17 @@ def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int]]:
 
         sample_prefix = json_path.stem.replace("_参数", "")
         image_path = source_dir / f"{sample_prefix}_有瑕疵干涉图.png"
+
+        # 真实数据：图片文件名不带"_有瑕疵干涉图"后缀，尝试多种扩展名
+        if not image_path.exists() and sim_type == "real":
+            for ext in [".bmp", ".png", ".jpg", ".jpeg", ".tif"]:
+                candidate = source_dir / f"{sample_prefix}{ext}"
+                if candidate.exists():
+                    image_path = candidate
+                    break
+
         ideal_path = source_dir / f"{sample_prefix}_理想干涉图.png"
-        if not image_path.exists() or not ideal_path.exists():
+        if not image_path.exists():
             continue
 
         try:
@@ -131,7 +140,139 @@ def write_weak_label(label_path: Path, cls_id: int) -> None:
     # Weak label: whole image is treated as the defect box.
     label_path.write_text(f"{cls_id} 0.5 0.5 1.0 1.0\n", encoding="utf-8")
 
-def generate_yolo_labels(defect_img_path: Path, ideal_img_path: Path, cls_id: int, label_path: Path) -> None:
+
+def generate_analytic_labels(
+    defect_img_path: Path,
+    meta: dict,
+    cls_id: int,
+    label_path: Path,
+) -> None:
+    """
+    解析标注：直接从 JSON 参数计算 YOLO 格式的边界框，无需差分图。
+    适用于 小凸起(cls=1)、小凹陷(cls=2)、灰尘污染(cls=3)、头发丝遮挡(cls=4)。
+
+    坐标转换公式（以牛顿环为例）：
+        物理坐标范围 [-L/2, L/2]（米）→ 像素坐标 [0, img_size]
+        pixel = (phys / L + 0.5) * img_size
+    """
+    # 读取图像尺寸
+    img_data = np.fromfile(str(defect_img_path), dtype=np.uint8)
+    img = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
+    if img is None:
+        write_weak_label(label_path, cls_id)
+        return
+
+    img_h, img_w = img.shape[:2]
+    sim_type = meta.get("sim_type", "wedge")
+
+    # 物理视场尺寸（米）
+    if sim_type == "newton":
+        field_x = 0.006   # ±3mm → 6mm 总宽
+        field_y = 0.006
+    else:
+        field_x = 0.030   # 0~30mm
+        field_y = 0.015   # 0~15mm
+
+    def phys_to_norm_newton(cx_m, cy_m, r_m):
+        """牛顿环：原点在视场中心"""
+        px = (cx_m / field_x + 0.5)
+        py = 1.0 - (cy_m / field_y + 0.5)   # imshow origin='lower' → y 翻转
+        pw = r_m * 2 / field_x
+        ph = r_m * 2 / field_y
+        return px, py, pw, ph
+
+    def phys_to_norm_wedge(cx_m, cy_m, r_m):
+        """劈尖：原点在视场左下角"""
+        px = cx_m / field_x
+        py = 1.0 - cy_m / field_y
+        pw = r_m * 2 / field_x
+        ph = r_m * 2 / field_y
+        return px, py, pw, ph
+
+    labels = []
+
+    if cls_id in (1, 2):
+        # 小凸起 / 小凹陷：从参数直接算每个 bump 的位置和半径
+        bump_count = int(meta.get("bump_count", 1))
+        bump_radius_mm = float(meta.get("bump_radius_mm", 2.4))
+        bump_position_mode = meta.get("bump_position_mode", "网格排列")
+
+        # 限制半径不超过视场 48%（与 parameters.py 一致）
+        max_r_m = min(field_x, field_y) * 0.48
+        r_m = float(np.clip(bump_radius_mm * 1e-3, 0.05e-3, max_r_m))
+
+        # 重建位置列表（与 parameters.py 的 _generate_*_positions 逻辑一致）
+        if bump_position_mode == "固定位置":
+            raw_positions = meta.get("fixed_bump_positions", [])
+            positions = [(float(p[0]), float(p[1])) for p in raw_positions[:bump_count]]
+        elif bump_position_mode == "随机分布":
+            # 随机位置无法从 JSON 精确重建，退回差分图标注
+            generate_yolo_labels_diff(defect_img_path, None, cls_id, label_path, meta)
+            return
+        else:
+            # 网格排列：重建网格
+            grid_size = int(np.ceil(np.sqrt(bump_count)))
+            positions = []
+            if sim_type == "newton":
+                sx, sy = field_x, field_y
+                for i in range(grid_size):
+                    for j in range(grid_size):
+                        if len(positions) >= bump_count:
+                            break
+                        cx = -sx / 2 + (j + 1) * sx / (grid_size + 1)
+                        base_sp = sy / (grid_size + 1)
+                        cy = -sy / 2 + (i + 1) * base_sp + i * base_sp * 0.3
+                        cy = float(np.clip(cy, -0.45 * sy, 0.45 * sy))
+                        positions.append((cx, cy))
+            else:
+                sx, sy = field_x, field_y
+                for i in range(grid_size):
+                    for j in range(grid_size):
+                        if len(positions) >= bump_count:
+                            break
+                        cx = (j + 1) * sx / (grid_size + 1)
+                        cy = (i + 1) * sy / (grid_size + 1)
+                        positions.append((cx, cy))
+
+        for cx_m, cy_m in positions[:bump_count]:
+            if sim_type == "newton":
+                px, py, pw, ph = phys_to_norm_newton(cx_m, cy_m, r_m)
+            else:
+                px, py, pw, ph = phys_to_norm_wedge(cx_m, cy_m, r_m)
+
+            # 适度留白 5%（相对于 bump 直径）
+            pad = max(pw, ph) * 0.05
+            pw = min(1.0, pw + pad * 2)
+            ph = min(1.0, ph + pad * 2)
+
+            # 裁剪到 [0,1]
+            px = float(np.clip(px, pw / 2, 1 - pw / 2))
+            py = float(np.clip(py, ph / 2, 1 - ph / 2))
+            pw = float(np.clip(pw, 0.01, 1.0))
+            ph = float(np.clip(ph, 0.01, 1.0))
+
+            labels.append(f"{cls_id} {px:.6f} {py:.6f} {pw:.6f} {ph:.6f}")
+
+    elif cls_id == 3:
+        # 灰尘污染：灰尘随机分布，无法解析，用全图弱标签
+        write_weak_label(label_path, cls_id)
+        return
+
+    elif cls_id == 4:
+        # 头发丝遮挡：路径随机，无法解析，用全图弱标签
+        write_weak_label(label_path, cls_id)
+        return
+
+    if not labels:
+        write_weak_label(label_path, cls_id)
+    else:
+        label_path.write_text("\n".join(labels) + "\n", encoding="utf-8")
+
+def generate_yolo_labels_diff(defect_img_path: Path, ideal_img_path: Path | None, cls_id: int, label_path: Path, meta: dict | None = None) -> None:
+    """差分图标注：用于表面划痕（cls=0）。理想图路径可选，为 None 时用弱标签。"""
+    if ideal_img_path is None or not ideal_img_path.exists():
+        write_weak_label(label_path, cls_id)
+        return
     try:
         # OpenCV不支持中文路径，使用 numpy + imdecode 读取
         defect_data = np.fromfile(str(defect_img_path), dtype=np.uint8)
@@ -251,7 +392,35 @@ def copy_and_label(
         out_lbl = output_dir / "labels" / split / f"{img_path.stem}.txt"
 
         shutil.copy2(img_path, out_img)
-        generate_yolo_labels(img_path, ideal_path, cls_id, out_lbl)
+
+        # 读取对应的 JSON meta（用于解析标注）
+        json_path = img_path.parent / img_path.name.replace("_有瑕疵干涉图.png", "_参数.json")
+        # 真实数据的 JSON 文件名格式不同
+        if not json_path.exists():
+            json_path = img_path.parent / f"{img_path.stem}_参数.json"
+        meta: dict = {}
+        if json_path.exists():
+            try:
+                with json_path.open("r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except Exception:
+                meta = {}
+
+        sim_type = meta.get("sim_type", "wedge")
+
+        # 真实数据：检查是否有预生成的标注文件（来自 merge_real_data.py）
+        if sim_type == "real":
+            pre_label = img_path.parent.parent / "labels" / f"{img_path.stem}.txt"
+            if pre_label.exists():
+                shutil.copy2(pre_label, out_lbl)
+            else:
+                write_weak_label(out_lbl, cls_id)
+        elif cls_id == 0:
+            # 表面划痕：差分图标注
+            generate_yolo_labels_diff(img_path, ideal_path, cls_id, out_lbl, meta)
+        else:
+            # 小凸起/小凹陷/灰尘/头发丝：解析标注
+            generate_analytic_labels(img_path, meta, cls_id, out_lbl)
 
 
 def write_yaml(output_dir: Path) -> None:

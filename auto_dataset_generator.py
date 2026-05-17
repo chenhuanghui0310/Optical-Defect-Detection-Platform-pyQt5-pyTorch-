@@ -366,28 +366,9 @@ class DatasetGenerator:
 
         elif defect_type in ("小突起", "小凸起"):
             params.use_manual_scratches = False
-            params.bump_count = np.random.randint(1, 8)
+            params.bump_count = np.random.randint(1, 11)   # 覆盖控制面板 1~10
             if sim_type == "newton":
-                # TODO 1.1 & 1.5：牛顿环小凸起
                 # 高度：60% 小尺寸(0.01~0.1μm)，40% 覆盖到控制面板上限 5.0μm
-                r_h = np.random.random()
-                if r_h < 0.60:
-                    params.bump_height = np.random.uniform(0.01, 0.10)   # 小尺寸
-                elif r_h < 0.80:
-                    params.bump_height = np.random.uniform(0.10, 1.0)    # 中等
-                else:
-                    params.bump_height = np.random.uniform(1.0, 5.0)     # 大尺寸（覆盖控制面板上限）
-                # 半径：三段分层覆盖 0.15~2.88mm（2.88mm = 视场6mm × 48%，clip上限）
-                r_r = np.random.random()
-                if r_r < 0.40:
-                    params.bump_radius_mm = np.random.uniform(0.15, 0.8)   # 小半径
-                elif r_r < 0.75:
-                    params.bump_radius_mm = np.random.uniform(0.8, 1.8)    # 中半径
-                else:
-                    params.bump_radius_mm = np.random.uniform(1.8, 2.88)   # 大半径（接近clip上限）
-            else:
-                # TODO 1.3 & 1.5：劈尖小凸起
-                # 高度：60% 小尺寸，40% 覆盖到 5.0μm
                 r_h = np.random.random()
                 if r_h < 0.60:
                     params.bump_height = np.random.uniform(0.01, 0.10)
@@ -395,22 +376,38 @@ class DatasetGenerator:
                     params.bump_height = np.random.uniform(0.10, 1.0)
                 else:
                     params.bump_height = np.random.uniform(1.0, 5.0)
-                # 半径：三段分层覆盖 0.5~7.0mm（控制面板上限）
+                # 半径：三段分层覆盖 0.2~7.0mm（对齐控制面板 0.2~7.0）
+                r_r = np.random.random()
+                if r_r < 0.40:
+                    params.bump_radius_mm = np.random.uniform(0.2, 1.5)    # 小半径
+                elif r_r < 0.75:
+                    params.bump_radius_mm = np.random.uniform(1.5, 4.0)    # 中半径
+                else:
+                    params.bump_radius_mm = np.random.uniform(4.0, 7.0)    # 大半径
+            else:
+                # 劈尖小凸起
+                r_h = np.random.random()
+                if r_h < 0.60:
+                    params.bump_height = np.random.uniform(0.01, 0.10)
+                elif r_h < 0.80:
+                    params.bump_height = np.random.uniform(0.10, 1.0)
+                else:
+                    params.bump_height = np.random.uniform(1.0, 5.0)
+                # 半径：覆盖控制面板 0.2~7.0mm
                 r_r = np.random.random()
                 if r_r < 0.35:
-                    params.bump_radius_mm = np.random.uniform(0.5, 2.0)    # 小半径
+                    params.bump_radius_mm = np.random.uniform(0.2, 2.0)
                 elif r_r < 0.70:
-                    params.bump_radius_mm = np.random.uniform(2.0, 4.5)    # 中半径
+                    params.bump_radius_mm = np.random.uniform(2.0, 4.5)
                 else:
-                    params.bump_radius_mm = np.random.uniform(4.5, 7.0)    # 大半径（覆盖控制面板上限）
+                    params.bump_radius_mm = np.random.uniform(4.5, 7.0)
 
             params.bump_position_mode = np.random.choice(["网格排列", "随机分布", "固定位置"])
 
         elif defect_type == "小凹陷":
             params.use_manual_scratches = False
-            params.bump_count = np.random.randint(1, 8)
+            params.bump_count = np.random.randint(1, 11)   # 覆盖控制面板 1~10
             if sim_type == "newton":
-                # TODO 1.2 & 1.5：牛顿环小凹陷
                 r_h = np.random.random()
                 if r_h < 0.60:
                     params.bump_height = np.random.uniform(0.01, 0.10)
@@ -418,16 +415,16 @@ class DatasetGenerator:
                     params.bump_height = np.random.uniform(0.10, 1.0)
                 else:
                     params.bump_height = np.random.uniform(1.0, 5.0)
-                # 半径：三段分层覆盖 0.2~2.88mm
+                # 半径：覆盖控制面板 0.2~7.0mm
                 r_r = np.random.random()
                 if r_r < 0.40:
-                    params.bump_radius_mm = np.random.uniform(0.2, 0.9)
+                    params.bump_radius_mm = np.random.uniform(0.2, 1.5)
                 elif r_r < 0.75:
-                    params.bump_radius_mm = np.random.uniform(0.9, 1.9)
+                    params.bump_radius_mm = np.random.uniform(1.5, 4.0)
                 else:
-                    params.bump_radius_mm = np.random.uniform(1.9, 2.88)
+                    params.bump_radius_mm = np.random.uniform(4.0, 7.0)
             else:
-                # TODO 1.4 & 1.5：劈尖小凹陷
+                # 劈尖小凹陷
                 r_h = np.random.random()
                 if r_h < 0.60:
                     params.bump_height = np.random.uniform(0.01, 0.10)
@@ -435,10 +432,10 @@ class DatasetGenerator:
                     params.bump_height = np.random.uniform(0.10, 1.0)
                 else:
                     params.bump_height = np.random.uniform(1.0, 5.0)
-                # 半径：三段分层覆盖 0.5~7.0mm
+                # 半径：覆盖控制面板 0.2~7.0mm
                 r_r = np.random.random()
                 if r_r < 0.35:
-                    params.bump_radius_mm = np.random.uniform(0.5, 2.0)
+                    params.bump_radius_mm = np.random.uniform(0.2, 2.0)
                 elif r_r < 0.70:
                     params.bump_radius_mm = np.random.uniform(2.0, 4.5)
                 else:
@@ -449,23 +446,45 @@ class DatasetGenerator:
             params.use_manual_scratches = False
             if sim_type == "newton":
                 params.defect_type = "灰尘污染"
-                params.dust_density = np.random.randint(5, 20)
+                params.dust_density = np.random.randint(0, 30)   # 覆盖控制面板 0~30
             else:
-                params.dust_density = np.random.randint(2, 20)
+                params.dust_density = np.random.randint(0, 30)
 
         elif defect_type == "头发丝遮挡":
             params.use_manual_scratches = False
             params.defect_type = "头发丝遮挡"
-            params.hair_count = np.random.randint(1, 6)
+            params.hair_count = np.random.randint(1, 20)   # 覆盖控制面板 1~20
 
-        # 光学参数微调：覆盖可见光范围，包含平台默认值 589nm（黄光）
-        params.lambda_nm = np.random.randint(520, 700)
-        
-        if sim_type == "newton":
-            params.R_mm = np.random.uniform(800.0, 1500.0)
-            params.d0_um = np.random.uniform(2.0, 8.0)
+        # 光学参数：覆盖完整可见光范围 380~760nm，确保各颜色均匀采样
+        # 分段采样：紫/蓝(380-492) 20%，绿/黄(492-597) 40%，橙/红(597-760) 40%
+        color_roll = np.random.random()
+        if color_roll < 0.20:
+            params.lambda_nm = np.random.randint(380, 492)   # 紫/蓝/青
+        elif color_roll < 0.60:
+            params.lambda_nm = np.random.randint(492, 597)   # 绿/黄
         else:
-            params.theta_rad = np.random.uniform(5e-5, 20e-5)
+            params.lambda_nm = np.random.randint(597, 760)   # 橙/红
+
+        if sim_type == "newton":
+            # 曲率半径：覆盖控制面板完整范围 1000~5000mm
+            params.R_mm = np.random.uniform(1000.0, 5000.0)
+            # 中心间隙：覆盖控制面板完整范围 0~15μm（避免 0 导致除零，从 0.1 开始）
+            params.d0_um = np.random.uniform(0.1, 15.0)
+            # 折射率：覆盖控制面板范围 1.0~5.0
+            n_val = np.random.uniform(1.0, 5.0)
+            params.n = n_val
+            params.n1 = n_val
+            params.n2 = n_val
+            params.n3 = n_val
+        else:
+            # 劈尖角：覆盖控制面板范围 0.1~20（×1e-5 rad）
+            params.theta_rad = np.random.uniform(0.1e-5, 20e-5)
+            # 劈尖厚度偏移：覆盖控制面板范围 0~50μm
+            params.d0_um = np.random.uniform(0.0, 50.0)
+            # 劈尖三层折射率各自独立随机，范围 1.0~3.0
+            params.n1 = np.random.uniform(1.0, 3.0)
+            params.n2 = np.random.uniform(1.0, 3.0)
+            params.n3 = np.random.uniform(1.0, 3.0)
 
         return params
 
@@ -502,8 +521,8 @@ class DatasetGenerator:
             ideal_title = "理想劈尖干涉图样" if sim_type == "wedge" else "理想牛顿环干涉图样"
             defect_title_prefix = "有瑕疵劈尖干涉图样" if sim_type == "wedge" else "有瑕疵牛顿环干涉图样"
             
-            self._save_interference_image(ideal_pattern, ideal_path, ideal_title, cmap, sim_type)
-            self._save_interference_image(defect_pattern, defect_path, f"{defect_title_prefix}（{defect_type}）", cmap, sim_type)
+            self._save_interference_image_augmented(ideal_pattern, ideal_path, ideal_title, cmap, sim_type, augment=False)
+            self._save_interference_image_augmented(defect_pattern, defect_path, f"{defect_title_prefix}（{defect_type}）", cmap, sim_type, augment=True)
 
             # 保存3D形貌图
             self._save_topography_image(defect_thickness, topography_path, defect_type, sim_type)
@@ -527,37 +546,85 @@ class DatasetGenerator:
         finally:
             plt.close('all')
 
-    def _save_interference_image(self, pattern, filepath, title, cmap, sim_type="wedge"):
-        """保存干涉图（与平台风格一致）"""
-        # TODO 1.6：dpi 统一为 150，figsize=(5,5) for newton / (7,3.5) for wedge
-        # 输出尺寸：牛顿环 750×750，劈尖 1050×525，与平台 save_figure 一致
+    # ── 数据增强：让仿真图更像真实图 ──────────────────────────────
+    @staticmethod
+    def _augment_interference_image(img_array: np.ndarray) -> np.ndarray:
+        """
+        对干涉图 numpy 数组（H×W，float32，0~1）施加随机增强。
+        增强在保存前应用，不影响理想图（理想图只用于差分标注，不送入训练）。
+
+        增强项：
+          1. 高斯噪声（模拟传感器噪声）
+          2. 高斯模糊（模拟镜头/对焦模糊）
+          3. 亮度/对比度随机扰动
+          4. JPEG 压缩伪影（模拟图片传输/保存损失）
+        """
+        aug = img_array.copy()
+
+        # 1. 高斯噪声（50% 概率，强度 0.5~2%）
+        if np.random.random() < 0.5:
+            sigma = np.random.uniform(0.005, 0.02)
+            noise = np.random.normal(0, sigma, aug.shape)
+            aug = np.clip(aug + noise, 0.0, 1.0)
+
+        # 2. 高斯模糊（40% 概率，sigma 0.3~1.2px）
+        if np.random.random() < 0.4:
+            from scipy.ndimage import gaussian_filter as _gf
+            blur_sigma = np.random.uniform(0.3, 1.2)
+            aug = _gf(aug, sigma=blur_sigma)
+            aug = np.clip(aug, 0.0, 1.0)
+
+        # 3. 亮度/对比度扰动（60% 概率）
+        if np.random.random() < 0.6:
+            # 亮度偏移 ±8%
+            brightness = np.random.uniform(-0.08, 0.08)
+            # 对比度缩放 0.85~1.15
+            contrast = np.random.uniform(0.85, 1.15)
+            aug = np.clip(aug * contrast + brightness, 0.0, 1.0)
+
+        return aug.astype(np.float32)
+
+    def _save_interference_image_augmented(
+        self, pattern, filepath, title, cmap, sim_type="wedge", augment=False
+    ):
+        """保存干涉图，augment=True 时对图像数据施加随机增强后再保存。"""
+        aug_pattern = pattern
+        if augment:
+            aug_pattern = self._augment_interference_image(pattern.astype(np.float32))
+
         fig, ax = plt.subplots(figsize=(7, 3.5) if sim_type == "wedge" else (5, 5), dpi=100)
         fig.set_facecolor('#FFFFFF')
 
-        # 显示干涉图像
         if sim_type == "newton":
-            extent = [-3, 3, -3, 3] # -3mm 到 3mm
-            xticks = np.arange(-3, 4, 1)
-            yticks = np.arange(-3, 4, 1)
+            extent = [-3, 3, -3, 3]
         else:
-            extent = [0, 30, 0, 15] # 0-30mm, 0-15mm
-            xticks = np.arange(0, 31, 3)
-            yticks = np.arange(0, 16, 3)
+            extent = [0, 30, 0, 15]
 
-        ax.imshow(pattern, extent=extent, cmap=cmap, origin='lower', aspect='equal')
-        
-        # 根据需求：去除标题、坐标轴标签、刻度数值，仅保留纯净的干涉图和绘图边框
-        # ax.set_title(title, fontsize=16, fontweight='bold')
-        # ax.set_xlabel('x (mm)', fontsize=10)
-        # ax.set_ylabel('y (mm)', fontsize=10)
-
-        # 隐藏坐标轴刻度，但保留边框（为了兼容后续的数据集切割防偏脚本）
+        ax.imshow(aug_pattern, extent=extent, cmap=cmap, origin='lower', aspect='equal')
         ax.set_xticks([])
         ax.set_yticks([])
 
-        plt.tight_layout()
-        plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close(fig)
+        # JPEG 压缩伪影（30% 概率）：先保存为 JPEG 再读回，再保存为 PNG
+        if augment and np.random.random() < 0.3:
+            import tempfile, cv2 as _cv2
+            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+            tmp.close()
+            plt.tight_layout()
+            plt.savefig(tmp.name, dpi=150, bbox_inches='tight',
+                        facecolor='white', format='jpeg',
+                        pil_kwargs={"quality": np.random.randint(60, 85)})
+            plt.close(fig)
+            # 读回再存为 PNG
+            img_bgr = _cv2.imread(tmp.name)
+            os.unlink(tmp.name)
+            if img_bgr is not None:
+                _, buf = _cv2.imencode(".png", img_bgr)
+                buf.tofile(str(filepath))
+                return
+        else:
+            plt.tight_layout()
+            plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white')
+            plt.close(fig)
 
     def _save_topography_image(self, thickness_data, filepath, defect_type, sim_type="wedge"):
         """保存3D形貌图（与平台风格一致）"""
