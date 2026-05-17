@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets, QtCore, QtGui
+﻿from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QComboBox, QGroupBox, QSpinBox, QDoubleSpinBox,
                              QPushButton, QSizePolicy, QSlider)
@@ -501,7 +501,7 @@ class ControlPanel(QWidget):
         defect_type_label.setStyleSheet(self.label_style)
 
         self.defect_combo = QComboBox()
-        self.defect_combo.addItems(["无瑕疵", "灰尘污染", "表面划痕", "小突起", "小凹陷", "头发丝遮挡"])  # 新增头发丝
+        self.defect_combo.addItems(["无瑕疵", "灰尘污染", "表面划痕", "小凸起", "小凹陷", "头发丝遮挡"])  # 新增头发丝
         self.defect_combo.setCurrentText(self.params.defect_type)
         self.defect_combo.setStyleSheet(self.combo_style)
         self.defect_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -544,7 +544,7 @@ class ControlPanel(QWidget):
         self.scratch_type_label.setStyleSheet(self.disabled_label_style)
 
         self.scratch_type_combo = QComboBox()
-        self.scratch_type_combo.addItems(["凹陷划痕", "突起划痕"])
+        self.scratch_type_combo.addItems(["凹陷划痕", "凸起划痕"])
         self.scratch_type_combo.setCurrentText(self.params.scratch_type)
         self.scratch_type_combo.setStyleSheet(self.disabled_combo_style)
         self.scratch_type_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -959,7 +959,7 @@ class ControlPanel(QWidget):
         widgets = {
             "灰尘污染": [self.dust_spin],
             "表面划痕": [self.scratch_type_combo],
-            "小突起": [self.bump_spin, self.bump_height_spin, self.bump_radius_spin, self.bump_position_combo],
+            "小凸起": [self.bump_spin, self.bump_height_spin, self.bump_radius_spin, self.bump_position_combo],
             "小凹陷": [self.bump_spin, self.bump_height_spin, self.bump_radius_spin, self.bump_position_combo],
             "头发丝遮挡": [self.hair_spin],
         }
@@ -1011,7 +1011,7 @@ class ControlPanel(QWidget):
         elif defect_type == "表面划痕":
             self.scratch_type_label.setStyleSheet(self.label_style)
 
-        elif defect_type in ["小突起", "小凹陷"]:
+        elif defect_type in ["小凸起", "小凹陷"]:
             self.bump_label.setStyleSheet(self.label_style)
             self.bump_height_label.setStyleSheet(self.label_style)
             self.bump_radius_label.setStyleSheet(self.label_style)

@@ -638,9 +638,13 @@ class SimulationParameters:
         self.n1 = self.n
         self.n2 = self.n
         self.n3 = self.n
-        self.defect_type = control_panel.defect_combo.currentText()
+        # UI 显示"小凸起"，内部逻辑用"小突起"
+        raw_defect = control_panel.defect_combo.currentText()
+        self.defect_type = "小突起" if raw_defect == "小凸起" else raw_defect
         self.dust_density = control_panel.dust_spin.value()
-        self.scratch_type = control_panel.scratch_type_combo.currentText()
+        # UI 显示"凸起划痕"，内部逻辑用"突起划痕"
+        raw_scratch = control_panel.scratch_type_combo.currentText()
+        self.scratch_type = "突起划痕" if raw_scratch == "凸起划痕" else raw_scratch
         self.bump_count = control_panel.bump_spin.value()
         self.bump_height = control_panel.bump_height_spin.value()
         self.bump_radius_mm = control_panel.bump_radius_spin.value()
