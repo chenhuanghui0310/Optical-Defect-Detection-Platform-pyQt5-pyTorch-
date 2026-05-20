@@ -149,7 +149,7 @@ def generate_analytic_labels(
 ) -> None:
     """
     解析标注：直接从 JSON 参数计算 YOLO 格式的边界框，无需差分图。
-    适用于 小凸起(cls=1)、小凹陷(cls=2)、灰尘污染(cls=3)、头发丝遮挡(cls=4)。
+    适用于 小凸起(cls=1)、小凹陷(cls=2)、头发丝遮挡(cls=4)。
 
     坐标转换公式（以牛顿环为例）：
         物理坐标范围 [-L/2, L/2]（米）→ 像素坐标 [0, img_size]
@@ -253,11 +253,6 @@ def generate_analytic_labels(
 
             labels.append(f"{cls_id} {px:.6f} {py:.6f} {pw:.6f} {ph:.6f}")
 
-    elif cls_id == 3:
-        # 灰尘污染：灰尘随机分布，无法解析，用全图弱标签
-        write_weak_label(label_path, cls_id)
-        return
-
     elif cls_id == 4:
         # 头发丝遮挡：路径随机，无法解析，用全图弱标签
         write_weak_label(label_path, cls_id)
@@ -319,8 +314,9 @@ def generate_yolo_labels_diff(defect_img_path: Path, ideal_img_path: Path | None
         diff = cv2.absdiff(defect_plot, ideal_plot_resized)
         gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
         
-        # 降低二值化阈值，捕捉小突起和小凹陷引起的微小条纹畸变
-        _, thresh = cv2.threshold(gray, 8, 255, cv2.THRESH_BINARY)
+        # 灰尘亮度差更弱，单独降低阈值
+        thresh_val = 3 if cls_id == 3 else 8
+        _, thresh = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
 
         # 根据图像尺寸自适应形态学核大小
         # 牛顿环图像约 750×750，劈尖图像约 750×375，核大小按比例缩放
@@ -415,11 +411,11 @@ def copy_and_label(
                 shutil.copy2(pre_label, out_lbl)
             else:
                 write_weak_label(out_lbl, cls_id)
-        elif cls_id == 0:
-            # 表面划痕：差分图标注
+        elif cls_id in (0, 3):
+            # 表面划痕/灰尘污染：差分图标注
             generate_yolo_labels_diff(img_path, ideal_path, cls_id, out_lbl, meta)
         else:
-            # 小凸起/小凹陷/灰尘/头发丝：解析标注
+            # 小凸起/小凹陷/头发丝：解析标注
             generate_analytic_labels(img_path, meta, cls_id, out_lbl)
 
 

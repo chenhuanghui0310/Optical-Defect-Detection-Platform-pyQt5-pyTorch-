@@ -35,7 +35,7 @@ def get_default_model_path() -> Path:
         / "dl_main_model_yolo"
         / "runs"
         / "train"
-        / "yolo11s_final_split6"
+        / "yolo11s_final_split8"
         / "weights"
         / "best.pt"
     )
