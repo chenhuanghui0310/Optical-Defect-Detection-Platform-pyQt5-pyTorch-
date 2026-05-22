@@ -35,7 +35,7 @@ def get_default_model_path() -> Path:
         / "dl_main_model_yolo"
         / "runs"
         / "train"
-        / "yolo11s_final_split8"
+        / "yolo11s_final_split92"
         / "weights"
         / "best.pt"
     )
@@ -138,6 +138,64 @@ class DefectAIService:
         }
         return mapping.get(label, label)
 
+    @staticmethod
+    def _bbox_iou(box1: list[float] | None, box2: list[float] | None) -> float:
+        if not box1 or not box2:
+            return 0.0
+        ax1, ay1, ax2, ay2 = box1
+        bx1, by1, bx2, by2 = box2
+        inter_x1 = max(ax1, bx1)
+        inter_y1 = max(ay1, by1)
+        inter_x2 = min(ax2, bx2)
+        inter_y2 = min(ay2, by2)
+        if inter_x2 <= inter_x1 or inter_y2 <= inter_y1:
+            return 0.0
+        inter = (inter_x2 - inter_x1) * (inter_y2 - inter_y1)
+        area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+        area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+        denom = area_a + area_b - inter
+        return inter / denom if denom > 0 else 0.0
+
+    @staticmethod
+    def _accept_prediction(label: str, conf_val: float, bbox_xyxy: list[float] | None, image_shape: tuple[int, int]) -> bool:
+        h, w = image_shape
+        per_class_min_conf = {
+            "scratch": 0.30,
+            "bump": 0.18,
+            "dent": 0.18,
+            "dust": 0.28,
+            "hair": 0.40,
+        }
+        if conf_val < per_class_min_conf.get(label, 0.30):
+            return False
+
+        if label == "hair" and bbox_xyxy:
+            x1, y1, x2, y2 = bbox_xyxy
+            bw = max(1.0, x2 - x1)
+            bh = max(1.0, y2 - y1)
+            aspect = max(bw, bh) / max(1.0, min(bw, bh))
+            area_ratio = (bw * bh) / float(max(1, w * h))
+            if aspect < 2.2 and area_ratio < 0.35:
+                return False
+        return True
+
+    def _postprocess_predictions(self, predictions: list[DefectPrediction], image_shape: tuple[int, int]) -> list[DefectPrediction]:
+        accepted: list[DefectPrediction] = []
+        for pred in predictions:
+            if self._accept_prediction(pred.label, pred.confidence, pred.bbox_xyxy, image_shape):
+                accepted.append(pred)
+
+        # 类别优先：若局部 bump/dent 与 hair 重叠，优先保留 bump/dent，避免小凸起被误判成头发丝
+        refined: list[DefectPrediction] = []
+        local_targets = [p for p in accepted if p.label in {"bump", "dent"}]
+        for pred in accepted:
+            if pred.label == "hair":
+                if any(self._bbox_iou(pred.bbox_xyxy, other.bbox_xyxy) > 0.2 for other in local_targets):
+                    continue
+            refined.append(pred)
+        refined.sort(key=lambda x: x.confidence, reverse=True)
+        return refined
+
     def predict_image(
         self,
         image_path: str,
@@ -193,6 +251,7 @@ class DefectAIService:
                     source=tmp_path,
                     conf=conf,
                     iou=iou,
+                    imgsz=960,
                     device=dev,
                     verbose=False,
                     save=False,
@@ -213,16 +272,12 @@ class DefectAIService:
         names = result.names if isinstance(result.names, dict) else {}
         boxes = result.boxes
 
-        predictions: list[DefectPrediction] = []
+        raw_predictions: list[DefectPrediction] = []
         if boxes is not None and len(boxes) > 0:
             for box in boxes:
                 cls_id = int(box.cls.item())
                 label = str(names.get(cls_id, f"class_{cls_id}"))
                 conf_val = float(box.conf.item())
-                # 35% 以下视为未检测到，防止低置信度误判
-                if conf_val < 0.35:
-                    continue
-
                 # 将检测框坐标从裁剪图映射回原图
                 coords_on_crop = box.xyxy[0].tolist() if hasattr(box, "xyxy") else None
                 if coords_on_crop is not None and (crop_x1 > 0 or crop_y1 > 0):
@@ -230,7 +285,7 @@ class DefectAIService:
                 else:
                     coords = coords_on_crop
 
-                predictions.append(
+                raw_predictions.append(
                     DefectPrediction(
                         cls_id=cls_id,
                         label=label,
@@ -239,7 +294,62 @@ class DefectAIService:
                         bbox_xyxy=coords,
                     )
                 )
-            predictions.sort(key=lambda x: x.confidence, reverse=True)
+        predictions = self._postprocess_predictions(raw_predictions, (orig_h, orig_w))
+
+        # 弱目标兜底：首轮没有明显目标时，再用更低阈值做一次 rescue pass，优先找 bump/dent
+        if not predictions:
+            tmp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            tmp_path = tmp_file.name
+            tmp_file.close()
+            try:
+                cv2.imwrite(tmp_path, infer_img)
+
+                def _run_rescue(dev: str):
+                    return model.predict(
+                        source=tmp_path,
+                        conf=min(conf, 0.10),
+                        iou=iou,
+                        imgsz=1280,
+                        device=dev,
+                        verbose=False,
+                        save=False,
+                    )
+
+                try:
+                    rescue_results = _run_rescue(device)
+                except Exception:
+                    rescue_results = _run_rescue("cpu")
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+            rescue = rescue_results[0]
+            rescue_boxes = rescue.boxes
+            rescue_raw: list[DefectPrediction] = []
+            if rescue_boxes is not None and len(rescue_boxes) > 0:
+                for box in rescue_boxes:
+                    cls_id = int(box.cls.item())
+                    label = str(names.get(cls_id, f"class_{cls_id}"))
+                    if label not in {"bump", "dent"}:
+                        continue
+                    conf_val = float(box.conf.item())
+                    coords_on_crop = box.xyxy[0].tolist() if hasattr(box, "xyxy") else None
+                    if coords_on_crop is not None and (crop_x1 > 0 or crop_y1 > 0):
+                        coords = self._remap_bbox(coords_on_crop, crop_x1, crop_y1, orig_w, orig_h)
+                    else:
+                        coords = coords_on_crop
+                    rescue_raw.append(
+                        DefectPrediction(
+                            cls_id=cls_id,
+                            label=label,
+                            label_cn=self._label_to_cn(label),
+                            confidence=conf_val,
+                            bbox_xyxy=coords,
+                        )
+                    )
+            predictions = self._postprocess_predictions(rescue_raw, (orig_h, orig_w))
 
         # ── 在原图上绘制检测框并保存可视化结果 ───────────────────
         rendered_path = ""
