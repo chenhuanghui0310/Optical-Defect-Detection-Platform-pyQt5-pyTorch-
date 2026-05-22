@@ -867,14 +867,16 @@ class ControlPanel(QWidget):
         self.params.n2 = self.params.n
         self.params.n3 = self.params.n
         self.params.hair_count = self.hair_spin.value()  # 新增
-        self.params.defect_type = self.defect_combo.currentText()
+        raw_defect = self.defect_combo.currentText()
+        self.params.defect_type = "小突起" if raw_defect == "小凸起" else raw_defect
         self.params.dust_density = self.dust_spin.value()
-        self.params.scratch_type = self.scratch_type_combo.currentText()
+        raw_scratch = self.scratch_type_combo.currentText()
+        self.params.scratch_type = "突起划痕" if raw_scratch == "凸起划痕" else raw_scratch
         self.params.bump_count = self.bump_spin.value()
         self.params.bump_height = self.bump_height_spin.value()
         self.params.bump_radius_mm = self.bump_radius_spin.value()
         self.params.bump_position_mode = self.bump_position_combo.currentText()
-        self.params.manual_scratch_type = self.scratch_type_combo.currentText()
+        self.params.manual_scratch_type = self.params.scratch_type
         self.params.brush_size = self.brush_size_spin.value()
 
         # 修改部分：滑块值(0-100) 转换为归一化深度(0.0-1.0)
@@ -889,9 +891,11 @@ class ControlPanel(QWidget):
         self.R_spin.setValue(self.params.R_mm)
         self.n_spin.setValue(self.params.n)
         self.hair_spin.setValue(self.params.hair_count)  # 新增
-        self.defect_combo.setCurrentText(self.params.defect_type)
+        ui_defect_type = "小凸起" if self.params.defect_type == "小突起" else self.params.defect_type
+        self.defect_combo.setCurrentText(ui_defect_type)
         self.dust_spin.setValue(self.params.dust_density)
-        self.scratch_type_combo.setCurrentText(self.params.scratch_type)
+        ui_scratch_type = "凸起划痕" if self.params.scratch_type == "突起划痕" else self.params.scratch_type
+        self.scratch_type_combo.setCurrentText(ui_scratch_type)
         self.bump_spin.setValue(self.params.bump_count)
         self.bump_height_spin.setValue(self.params.bump_height)
         self.bump_radius_spin.setValue(self.params.bump_radius_mm)
@@ -915,6 +919,7 @@ class ControlPanel(QWidget):
         widgets = {
             "灰尘污染": [self.dust_spin],
             "表面划痕": [self.scratch_type_combo],
+            "小突起": [self.bump_spin, self.bump_height_spin, self.bump_radius_spin, self.bump_position_combo],
             "小凸起": [self.bump_spin, self.bump_height_spin, self.bump_radius_spin, self.bump_position_combo],
             "小凹陷": [self.bump_spin, self.bump_height_spin, self.bump_radius_spin, self.bump_position_combo],
             "头发丝遮挡": [self.hair_spin],
@@ -967,7 +972,7 @@ class ControlPanel(QWidget):
         elif defect_type == "表面划痕":
             self.scratch_type_label.setStyleSheet(self.label_style)
 
-        elif defect_type in ["小凸起", "小凹陷"]:
+        elif defect_type in ["小突起", "小凸起", "小凹陷"]:
             self.bump_label.setStyleSheet(self.label_style)
             self.bump_height_label.setStyleSheet(self.label_style)
             self.bump_radius_label.setStyleSheet(self.label_style)

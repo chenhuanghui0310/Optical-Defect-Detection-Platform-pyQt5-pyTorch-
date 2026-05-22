@@ -33,6 +33,7 @@ class SimulationParameters:
         self.fixed_bump_positions = [
             (-0.001, -0.001), (0.001, -0.001), (0.0, 0.001)
         ]
+        self.generated_bump_positions = []
 
         # 头发丝遮挡参数
         self.hair_count = 3
@@ -67,6 +68,7 @@ class SimulationParameters:
         self.bump_radius_mm = 2.4
         self.bump_type = "小突起"
         self.bump_position_mode = "网格排列"
+        self.generated_bump_positions = []
         self.manual_scratch_type = "凹陷划痕"
         self.brush_size = 15
         self.brush_depth = 0.15
@@ -551,6 +553,7 @@ class SimulationParameters:
         base_depth_m = base_depth * depth_sign
 
         positions = self._generate_bump_positions(screen_length_x, screen_length_y)
+        self.generated_bump_positions = [(float(x), float(y)) for x, y in positions[:self.bump_count]]
 
         # 用户可调半径（米），并限制在视场内以免数值过大
         radius_m = self.bump_radius_mm * 1e-3
@@ -772,6 +775,7 @@ class SimulationParameters:
             'bump_type': self.bump_type,
             'bump_position_mode': self.bump_position_mode,
             'fixed_bump_positions': self.fixed_bump_positions,
+            'generated_bump_positions': self.generated_bump_positions,
             'dust_density': self.dust_density,
             'brush_size': self.brush_size,
             'brush_depth': self.brush_depth,
@@ -800,6 +804,7 @@ class SimulationParameters:
             self.fixed_bump_positions = params_dict.get('fixed_bump_positions', [
                 (-0.001, -0.001), (0.001, -0.001), (0.0, 0.001)
             ])
+            self.generated_bump_positions = params_dict.get('generated_bump_positions', [])
             self.dust_density = params_dict.get('dust_density', 5)
             self.brush_size = params_dict.get('brush_size', 15)
             self.brush_depth = params_dict.get('brush_depth', 0.5)

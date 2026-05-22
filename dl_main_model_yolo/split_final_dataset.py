@@ -31,6 +31,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Delete existing output-dir before generating",
     )
+    parser.add_argument(
+        "--preprocess-real",
+        action="store_true",
+        help="Apply denoise/contrast normalization to real images before copying into the YOLO split",
+    )
+    parser.add_argument(
+        "--max-real-train-ratio",
+        type=float,
+        default=1.0,
+        help="Upper bound of real-image ratio in train split, e.g. 0.15 means at most 15%% real images in train",
+    )
     return parser.parse_args()
 
 
@@ -60,7 +71,7 @@ def defect_to_cls(defect_type: str) -> int:
     return mapping[defect_type]
 
 
-def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int]]:
+def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int, str]]:
     samples = []
     skipped_unknown = 0
     for json_path in sorted(source_dir.glob("*_参数.json")):
@@ -97,14 +108,21 @@ def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int]]:
         except ValueError:
             continue
 
-        samples.append((image_path, ideal_path, cls_id))
+        samples.append((image_path, ideal_path, cls_id, sim_type))
 
     if skipped_unknown > 0:
         print(f"  [INFO] 跳过 {skipped_unknown} 个旧版样本（sim_type=unknown）")
     return samples
 
 
-def split_indices(n: int, val_ratio: float, test_ratio: float, seed: int) -> tuple[set[int], set[int], set[int]]:
+def split_indices(
+    samples: list[tuple[Path, Path, int, str]],
+    val_ratio: float,
+    test_ratio: float,
+    seed: int,
+    max_real_train_ratio: float = 1.0,
+) -> tuple[set[int], set[int], set[int]]:
+    n = len(samples)
     indices = list(range(n))
     rng = random.Random(seed)
     rng.shuffle(indices)
@@ -133,12 +151,65 @@ def split_indices(n: int, val_ratio: float, test_ratio: float, seed: int) -> tup
     val_ids = set(indices[:val_n])
     test_ids = set(indices[val_n: val_n + test_n])
     train_ids = set(indices[val_n + test_n:])
+
+    max_real_train_ratio = float(np.clip(max_real_train_ratio, 0.0, 1.0))
+    if max_real_train_ratio < 1.0 and train_ids:
+        real_train = [idx for idx in train_ids if samples[idx][3] == "real"]
+        sim_train = [idx for idx in train_ids if samples[idx][3] != "real"]
+        max_real_count = int(len(train_ids) * max_real_train_ratio)
+        if sim_train and len(real_train) > max_real_count:
+            rng.shuffle(real_train)
+            keep_real = set(real_train[:max_real_count])
+            move_real = real_train[max_real_count:]
+            train_ids = set(sim_train) | keep_real
+            for idx in move_real:
+                if len(val_ids) <= len(test_ids):
+                    val_ids.add(idx)
+                else:
+                    test_ids.add(idx)
     return train_ids, val_ids, test_ids
 
 
 def write_weak_label(label_path: Path, cls_id: int) -> None:
     # Weak label: whole image is treated as the defect box.
     label_path.write_text(f"{cls_id} 0.5 0.5 1.0 1.0\n", encoding="utf-8")
+
+
+def preprocess_real_image(img: np.ndarray) -> np.ndarray:
+    """
+    轻量真实图预处理：
+    1. 中值滤波压制孤立噪点，减少把传感器噪声学成灰尘
+    2. CLAHE 仅做局部对比度归一，尽量保留瑕疵边缘
+    """
+    if img is None:
+        return img
+    if img.ndim == 2:
+        gray = img
+    else:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    denoised = cv2.medianBlur(gray, 3)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(denoised)
+    if img.ndim == 2:
+        return enhanced
+    return cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+
+
+def copy_image_maybe_preprocess(src: Path, dst: Path, preprocess: bool) -> None:
+    if not preprocess:
+        shutil.copy2(src, dst)
+        return
+    data = np.fromfile(str(src), dtype=np.uint8)
+    img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    if img is None:
+        shutil.copy2(src, dst)
+        return
+    out = preprocess_real_image(img)
+    ok, buf = cv2.imencode(dst.suffix or ".png", out)
+    if not ok:
+        shutil.copy2(src, dst)
+        return
+    buf.tofile(str(dst))
 
 
 def generate_analytic_labels(
@@ -162,7 +233,6 @@ def generate_analytic_labels(
         write_weak_label(label_path, cls_id)
         return
 
-    img_h, img_w = img.shape[:2]
     sim_type = meta.get("sim_type", "wedge")
 
     # 物理视场尺寸（米）
@@ -202,13 +272,12 @@ def generate_analytic_labels(
         r_m = float(np.clip(bump_radius_mm * 1e-3, 0.05e-3, max_r_m))
 
         # 重建位置列表（与 parameters.py 的 _generate_*_positions 逻辑一致）
-        if bump_position_mode == "固定位置":
+        generated_positions = meta.get("generated_bump_positions", [])
+        if generated_positions:
+            positions = [(float(p[0]), float(p[1])) for p in generated_positions[:bump_count]]
+        elif bump_position_mode == "固定位置":
             raw_positions = meta.get("fixed_bump_positions", [])
             positions = [(float(p[0]), float(p[1])) for p in raw_positions[:bump_count]]
-        elif bump_position_mode == "随机分布":
-            # 随机位置无法从 JSON 精确重建，退回差分图标注
-            generate_yolo_labels_diff(defect_img_path, None, cls_id, label_path, meta)
-            return
         else:
             # 网格排列：重建网格
             grid_size = int(np.ceil(np.sqrt(bump_count)))
@@ -370,13 +439,14 @@ def generate_yolo_labels_diff(defect_img_path: Path, ideal_img_path: Path | None
 
 
 def copy_and_label(
-    samples: list[tuple[Path, Path, int]],
+    samples: list[tuple[Path, Path, int, str]],
     output_dir: Path,
     train_ids: set[int],
     val_ids: set[int],
     test_ids: set[int],
+    preprocess_real: bool = False,
 ) -> None:
-    for idx, (img_path, ideal_path, cls_id) in enumerate(samples):
+    for idx, (img_path, ideal_path, cls_id, sample_sim_type) in enumerate(samples):
         if idx in train_ids:
             split = "train"
         elif idx in val_ids:
@@ -387,7 +457,11 @@ def copy_and_label(
         out_img = output_dir / "images" / split / img_path.name
         out_lbl = output_dir / "labels" / split / f"{img_path.stem}.txt"
 
-        shutil.copy2(img_path, out_img)
+        copy_image_maybe_preprocess(
+            img_path,
+            out_img,
+            preprocess=bool(preprocess_real and sample_sim_type == "real"),
+        )
 
         # 读取对应的 JSON meta（用于解析标注）
         json_path = img_path.parent / img_path.name.replace("_有瑕疵干涉图.png", "_参数.json")
@@ -402,7 +476,7 @@ def copy_and_label(
             except Exception:
                 meta = {}
 
-        sim_type = meta.get("sim_type", "wedge")
+        sim_type = meta.get("sim_type", sample_sim_type)
 
         # 真实数据：检查是否有预生成的标注文件（来自 merge_real_data.py）
         if sim_type == "real":
@@ -453,8 +527,21 @@ def main() -> None:
     if len(samples) < 2:
         raise RuntimeError("Not enough samples to split. Check source-dir contents.")
 
-    train_ids, val_ids, test_ids = split_indices(len(samples), args.val_ratio, args.test_ratio, args.seed)
-    copy_and_label(samples, output_dir, train_ids, val_ids, test_ids)
+    train_ids, val_ids, test_ids = split_indices(
+        samples,
+        args.val_ratio,
+        args.test_ratio,
+        args.seed,
+        args.max_real_train_ratio,
+    )
+    copy_and_label(
+        samples,
+        output_dir,
+        train_ids,
+        val_ids,
+        test_ids,
+        preprocess_real=args.preprocess_real,
+    )
     write_yaml(output_dir)
 
     print("Split finished")

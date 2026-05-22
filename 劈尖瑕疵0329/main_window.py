@@ -312,7 +312,7 @@ class DefectInterferenceWindow(QMainWindow):
     def defect_type_changed(self, text):
         """瑕疵类型改变时的处理"""
         try:
-            self.params.defect_type = text
+            self.params.defect_type = "小突起" if text == "小凸起" else text
             self.control_panel.update_defect_controls_visibility()
 
             # 更新手动画板的启用状态
@@ -353,10 +353,10 @@ class DefectInterferenceWindow(QMainWindow):
     def scratch_type_changed(self, text):
         """划痕类型改变时的处理"""
         try:
-            self.params.scratch_type = text
+            self.params.scratch_type = "突起划痕" if text == "凸起划痕" else text
             if self.params.defect_type == "表面划痕":
                 # 如果当前是表面划痕模式，同步手动划痕类型
-                self.params.manual_scratch_type = text
+                self.params.manual_scratch_type = self.params.scratch_type
                 self.update_simulation()
 
                 scratch_type_desc = "凹陷" if text == "凹陷划痕" else "突起"
@@ -697,4 +697,3 @@ class DefectInterferenceWindow(QMainWindow):
         """更新控制面板可见性"""
         if hasattr(self.control_panel, 'update_defect_controls_visibility'):
             self.control_panel.update_defect_controls_visibility()
-

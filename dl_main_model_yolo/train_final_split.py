@@ -14,9 +14,12 @@ def parse_args() -> argparse.Namespace:
         help="Dataset yaml produced by split_final_dataset.py",
     )
     parser.add_argument("--epochs", type=int, default=120)
-    parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--batch", type=int, default=16)
+    parser.add_argument("--imgsz", type=int, default=768)
+    parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--device", type=str, default="0")
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--cache", type=str, default="disk", choices=["False", "ram", "disk"], help="YOLO cache mode")
+    parser.add_argument("--amp", type=lambda x: str(x).lower() == "true", default=True, help="Enable AMP mixed precision")
     parser.add_argument(
         "--project",
         type=str,
@@ -29,17 +32,23 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     model = YOLO(args.model)
+    cache_mode = False if args.cache == "False" else args.cache
     model.train(
         data=args.data,
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
+        workers=args.workers,
+        cache=cache_mode,
+        amp=args.amp,
         project=args.project,
         name=args.name,
         pretrained=True,
         fliplr=0.0,
         flipud=0.0,
+        mosaic=0.2,
+        close_mosaic=15,
         verbose=True,
     )
 
