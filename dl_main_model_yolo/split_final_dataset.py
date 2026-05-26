@@ -3,45 +3,31 @@ import json
 import random
 import shutil
 from pathlib import Path
+
 import cv2
 import numpy as np
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Split Final_Dataset to YOLO train/val/test and generate weak labels"
+        description="Split Final_Dataset into YOLO train/val/test and build local labels."
     )
     parser.add_argument(
         "--source-dir",
         type=str,
         default=str(Path(__file__).resolve().parent.parent / "dataset" / "images" / "Final_Dataset"),
-        help="Directory containing *_参数.json and *_有瑕疵干涉图.png",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
         default=str(Path(__file__).resolve().parent.parent / "dataset" / "final_split_yolo"),
-        help="Output YOLO dataset root",
     )
-    parser.add_argument("--val-ratio", type=float, default=0.1, help="Validation ratio (default 0.1 → 8:1:1 split)")
-    parser.add_argument("--test-ratio", type=float, default=0.1, help="Test ratio (default 0.1 → 8:1:1 split)")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument(
-        "--clean",
-        action="store_true",
-        help="Delete existing output-dir before generating",
-    )
-    parser.add_argument(
-        "--preprocess-real",
-        action="store_true",
-        help="Apply denoise/contrast normalization to real images before copying into the YOLO split",
-    )
-    parser.add_argument(
-        "--max-real-train-ratio",
-        type=float,
-        default=1.0,
-        help="Upper bound of real-image ratio in train split, e.g. 0.15 means at most 15%% real images in train",
-    )
+    parser.add_argument("--val-ratio", type=float, default=0.1)
+    parser.add_argument("--test-ratio", type=float, default=0.1)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--clean", action="store_true")
+    parser.add_argument("--preprocess-real", action="store_true")
+    parser.add_argument("--max-real-train-ratio", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -53,6 +39,7 @@ def ensure_dirs(root: Path) -> None:
         root / "labels" / "train",
         root / "labels" / "val",
         root / "labels" / "test",
+        root / "metadata",
     ]:
         p.mkdir(parents=True, exist_ok=True)
 
@@ -61,7 +48,7 @@ def defect_to_cls(defect_type: str) -> int:
     mapping = {
         "表面划痕": 0,
         "小突起": 1,
-        "小凸起": 1,   # 统一"凸"字命名
+        "小凸起": 1,
         "小凹陷": 2,
         "灰尘污染": 3,
         "头发丝遮挡": 4,
@@ -72,13 +59,12 @@ def defect_to_cls(defect_type: str) -> int:
 
 
 def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int, str]]:
-    samples = []
+    samples: list[tuple[Path, Path, int, str]] = []
     skipped_unknown = 0
     for json_path in sorted(source_dir.glob("*_参数.json")):
         with json_path.open("r", encoding="utf-8") as f:
             meta = json.load(f)
 
-        # 过滤旧版数据（sim_type=unknown 的样本格式不一致，会污染训练集）
         sim_type = meta.get("sim_type", "unknown")
         if sim_type == "unknown":
             skipped_unknown += 1
@@ -90,10 +76,8 @@ def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int, str]]:
 
         sample_prefix = json_path.stem.replace("_参数", "")
         image_path = source_dir / f"{sample_prefix}_有瑕疵干涉图.png"
-
-        # 真实数据：图片文件名不带"_有瑕疵干涉图"后缀，尝试多种扩展名
         if not image_path.exists() and sim_type == "real":
-            for ext in [".bmp", ".png", ".jpg", ".jpeg", ".tif"]:
+            for ext in [".bmp", ".png", ".jpg", ".jpeg", ".tif", ".tiff"]:
                 candidate = source_dir / f"{sample_prefix}{ext}"
                 if candidate.exists():
                     image_path = candidate
@@ -111,7 +95,7 @@ def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int, str]]:
         samples.append((image_path, ideal_path, cls_id, sim_type))
 
     if skipped_unknown > 0:
-        print(f"  [INFO] 跳过 {skipped_unknown} 个旧版样本（sim_type=unknown）")
+        print(f"[INFO] skipped unknown-format samples: {skipped_unknown}")
     return samples
 
 
@@ -128,7 +112,7 @@ def split_indices(
     rng.shuffle(indices)
 
     if not (0 <= val_ratio < 1 and 0 <= test_ratio < 1 and (val_ratio + test_ratio) < 1):
-        raise ValueError("val-ratio and test-ratio must be >=0 and val+test < 1")
+        raise ValueError("val/test ratio invalid")
 
     val_n = int(round(n * val_ratio))
     test_n = int(round(n * test_ratio))
@@ -142,11 +126,8 @@ def split_indices(
         if test_n >= overflow:
             test_n -= overflow
         else:
-            val_n -= (overflow - test_n)
+            val_n -= overflow - test_n
             test_n = 0
-
-    val_n = max(0, val_n)
-    test_n = max(0, test_n)
 
     val_ids = set(indices[:val_n])
     test_ids = set(indices[val_n: val_n + test_n])
@@ -171,16 +152,174 @@ def split_indices(
 
 
 def write_weak_label(label_path: Path, cls_id: int) -> None:
-    # Weak label: whole image is treated as the defect box.
     label_path.write_text(f"{cls_id} 0.5 0.5 1.0 1.0\n", encoding="utf-8")
 
 
+def _load_image_unicode(path: Path) -> np.ndarray | None:
+    data = np.fromfile(str(path), dtype=np.uint8)
+    if data.size == 0:
+        return None
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+
+def _find_plot_bbox(img: np.ndarray) -> tuple[int, int, int, int]:
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    mask = (gray < 80).astype(np.uint8)
+    h, w = gray.shape
+    row_sums = np.sum(mask, axis=1)
+    col_sums = np.sum(mask, axis=0)
+    row_peaks = np.where(row_sums > w * 0.35)[0]
+    col_peaks = np.where(col_sums > h * 0.35)[0]
+    if len(row_peaks) >= 2 and len(col_peaks) >= 2:
+        x1 = int(col_peaks[0]) + 1
+        y1 = int(row_peaks[0]) + 1
+        x2 = int(col_peaks[-1]) - 1
+        y2 = int(row_peaks[-1]) - 1
+        if (x2 - x1) > w * 0.2 and (y2 - y1) > h * 0.2:
+            return x1, y1, x2, y2
+    return 0, 0, w, h
+
+
+def _deduplicate_yolo_lines(lines: list[str], decimals: int = 6) -> list[str]:
+    unique: list[str] = []
+    seen: set[tuple[int, float, float, float, float]] = set()
+    for line in lines:
+        parts = line.strip().split()
+        if len(parts) < 5:
+            continue
+        key = (
+            int(float(parts[0])),
+            round(float(parts[1]), decimals),
+            round(float(parts[2]), decimals),
+            round(float(parts[3]), decimals),
+            round(float(parts[4]), decimals),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(
+            f"{key[0]} {key[1]:.{decimals}f} {key[2]:.{decimals}f} {key[3]:.{decimals}f} {key[4]:.{decimals}f}"
+        )
+    return unique
+
+
+def _mask_to_yolo_boxes(mask: np.ndarray, cls_id: int, min_area: int = 20) -> list[str]:
+    contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    h, w = mask.shape[:2]
+    labels: list[str] = []
+    for contour in contours:
+        x, y, bw, bh = cv2.boundingRect(contour)
+        if bw * bh < min_area:
+            continue
+        xc = (x + bw / 2.0) / w
+        yc = (y + bh / 2.0) / h
+        wn = bw / float(w)
+        hn = bh / float(h)
+        labels.append(f"{cls_id} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}")
+    return _deduplicate_yolo_lines(labels)
+
+
+def _safe_mask(mask_data, mask_shape) -> np.ndarray | None:
+    if mask_data is None or mask_shape is None:
+        return None
+    try:
+        mask = np.array(mask_data, dtype=np.float32)
+        if mask.ndim == 1 and len(mask_shape) == 2:
+            mask = mask.reshape(mask_shape)
+        if mask.ndim != 2:
+            return None
+        return mask
+    except Exception:
+        return None
+
+
+def _refine_local_bbox_from_diff(
+    defect_img: np.ndarray,
+    ideal_img: np.ndarray | None,
+    approx_bbox_xyxy: tuple[int, int, int, int],
+) -> tuple[int, int, int, int] | None:
+    if ideal_img is None:
+        return None
+
+    dx1, dy1, dx2, dy2 = _find_plot_bbox(defect_img)
+    ix1, iy1, ix2, iy2 = _find_plot_bbox(ideal_img)
+    defect_plot = defect_img[dy1:dy2, dx1:dx2]
+    ideal_plot = ideal_img[iy1:iy2, ix1:ix2]
+    if defect_plot.size == 0 or ideal_plot.size == 0:
+        return None
+
+    ideal_plot = cv2.resize(ideal_plot, (defect_plot.shape[1], defect_plot.shape[0]))
+    diff = cv2.absdiff(defect_plot, ideal_plot)
+    diff_gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    diff_gray = cv2.GaussianBlur(diff_gray, (5, 5), 0)
+
+    ax1, ay1, ax2, ay2 = approx_bbox_xyxy
+    ax1 = max(dx1, ax1)
+    ay1 = max(dy1, ay1)
+    ax2 = min(dx2, ax2)
+    ay2 = min(dy2, ay2)
+    if ax2 <= ax1 or ay2 <= ay1:
+        return None
+
+    lx1 = max(0, ax1 - dx1)
+    ly1 = max(0, ay1 - dy1)
+    lx2 = min(diff_gray.shape[1], ax2 - dx1)
+    ly2 = min(diff_gray.shape[0], ay2 - dy1)
+    roi = diff_gray[ly1:ly2, lx1:lx2]
+    if roi.size == 0:
+        return None
+
+    max_val = float(np.max(roi))
+    mean_val = float(np.mean(roi))
+    if max_val < 4.0:
+        return None
+
+    thresh_val = max(4, int(min(max_val * 0.55, mean_val + max(6.0, (max_val - mean_val) * 0.45))))
+    _, binary = cv2.threshold(roi, thresh_val, 255, cv2.THRESH_BINARY)
+
+    kernel_size = max(3, int(round(min(roi.shape[:2]) * 0.08)))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    binary = cv2.dilate(binary, kernel, iterations=1)
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+
+    roi_cx = (lx2 - lx1) / 2.0
+    roi_cy = (ly2 - ly1) / 2.0
+    best_rect = None
+    best_score = -1.0
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        area = w * h
+        if area < 25:
+            continue
+        cx = x + w / 2.0
+        cy = y + h / 2.0
+        dist_score = 1.0 / (1.0 + np.hypot(cx - roi_cx, cy - roi_cy))
+        score = area * dist_score
+        if score > best_score:
+            best_score = score
+            best_rect = (x, y, w, h)
+
+    if best_rect is None:
+        return None
+
+    x, y, w, h = best_rect
+    pad = max(2, int(round(max(w, h) * 0.12)))
+    bx1 = max(dx1, dx1 + lx1 + x - pad)
+    by1 = max(dy1, dy1 + ly1 + y - pad)
+    bx2 = min(dx2, dx1 + lx1 + x + w + pad)
+    by2 = min(dy2, dy1 + ly1 + y + h + pad)
+    if bx2 <= bx1 or by2 <= by1:
+        return None
+    return bx1, by1, bx2, by2
+
+
 def preprocess_real_image(img: np.ndarray) -> np.ndarray:
-    """
-    轻量真实图预处理：
-    1. 中值滤波压制孤立噪点，减少把传感器噪声学成灰尘
-    2. CLAHE 仅做局部对比度归一，尽量保留瑕疵边缘
-    """
     if img is None:
         return img
     if img.ndim == 2:
@@ -199,8 +338,7 @@ def copy_image_maybe_preprocess(src: Path, dst: Path, preprocess: bool) -> None:
     if not preprocess:
         shutil.copy2(src, dst)
         return
-    data = np.fromfile(str(src), dtype=np.uint8)
-    img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    img = _load_image_unicode(src)
     if img is None:
         shutil.copy2(src, dst)
         return
@@ -212,230 +350,193 @@ def copy_image_maybe_preprocess(src: Path, dst: Path, preprocess: bool) -> None:
     buf.tofile(str(dst))
 
 
+def _bbox_line_from_xyxy(cls_id: int, img_w: int, img_h: int, box: tuple[int, int, int, int]) -> str | None:
+    x1, y1, x2, y2 = box
+    x1 = max(0, min(img_w - 1, x1))
+    y1 = max(0, min(img_h - 1, y1))
+    x2 = max(x1 + 1, min(img_w, x2))
+    y2 = max(y1 + 1, min(img_h, y2))
+    bw = x2 - x1
+    bh = y2 - y1
+    if bw <= 1 or bh <= 1:
+        return None
+    xc = (x1 + x2) / 2.0 / img_w
+    yc = (y1 + y2) / 2.0 / img_h
+    wn = bw / float(img_w)
+    hn = bh / float(img_h)
+    return f"{cls_id} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}"
+
+
 def generate_analytic_labels(
     defect_img_path: Path,
+    ideal_img_path: Path | None,
     meta: dict,
     cls_id: int,
     label_path: Path,
 ) -> None:
-    """
-    解析标注：直接从 JSON 参数计算 YOLO 格式的边界框，无需差分图。
-    适用于 小凸起(cls=1)、小凹陷(cls=2)、头发丝遮挡(cls=4)。
-
-    坐标转换公式（以牛顿环为例）：
-        物理坐标范围 [-L/2, L/2]（米）→ 像素坐标 [0, img_size]
-        pixel = (phys / L + 0.5) * img_size
-    """
-    # 读取图像尺寸
-    img_data = np.fromfile(str(defect_img_path), dtype=np.uint8)
-    img = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
+    img = _load_image_unicode(defect_img_path)
     if img is None:
         write_weak_label(label_path, cls_id)
         return
 
+    ideal_img = _load_image_unicode(ideal_img_path) if ideal_img_path and ideal_img_path.exists() else None
+    img_h, img_w = img.shape[:2]
     sim_type = meta.get("sim_type", "wedge")
-
-    # 物理视场尺寸（米）
-    if sim_type == "newton":
-        field_x = 0.006   # ±3mm → 6mm 总宽
-        field_y = 0.006
-    else:
-        field_x = 0.030   # 0~30mm
-        field_y = 0.015   # 0~15mm
-
-    def phys_to_norm_newton(cx_m, cy_m, r_m):
-        """牛顿环：原点在视场中心"""
-        px = (cx_m / field_x + 0.5)
-        py = 1.0 - (cy_m / field_y + 0.5)   # imshow origin='lower' → y 翻转
-        pw = r_m * 2 / field_x
-        ph = r_m * 2 / field_y
-        return px, py, pw, ph
-
-    def phys_to_norm_wedge(cx_m, cy_m, r_m):
-        """劈尖：原点在视场左下角"""
-        px = cx_m / field_x
-        py = 1.0 - cy_m / field_y
-        pw = r_m * 2 / field_x
-        ph = r_m * 2 / field_y
-        return px, py, pw, ph
-
-    labels = []
+    labels: list[str] = []
 
     if cls_id in (1, 2):
-        # 小凸起 / 小凹陷：从参数直接算每个 bump 的位置和半径
+        field_x = 0.006 if sim_type == "newton" else 0.030
+        field_y = 0.006 if sim_type == "newton" else 0.015
         bump_count = int(meta.get("bump_count", 1))
         bump_radius_mm = float(meta.get("bump_radius_mm", 2.4))
-        bump_position_mode = meta.get("bump_position_mode", "网格排列")
+        radius_m = max(0.00005, bump_radius_mm * 1e-3)
+        positions = meta.get("generated_bump_positions", [])[:bump_count]
+        if not positions:
+            positions = meta.get("fixed_bump_positions", [])[:bump_count]
 
-        # 限制半径不超过视场 48%（与 parameters.py 一致）
-        max_r_m = min(field_x, field_y) * 0.48
-        r_m = float(np.clip(bump_radius_mm * 1e-3, 0.05e-3, max_r_m))
-
-        # 重建位置列表（与 parameters.py 的 _generate_*_positions 逻辑一致）
-        generated_positions = meta.get("generated_bump_positions", [])
-        if generated_positions:
-            positions = [(float(p[0]), float(p[1])) for p in generated_positions[:bump_count]]
-        elif bump_position_mode == "固定位置":
-            raw_positions = meta.get("fixed_bump_positions", [])
-            positions = [(float(p[0]), float(p[1])) for p in raw_positions[:bump_count]]
-        else:
-            # 网格排列：重建网格
-            grid_size = int(np.ceil(np.sqrt(bump_count)))
-            positions = []
+        for cx_m, cy_m in positions:
+            cx_m = float(cx_m)
+            cy_m = float(cy_m)
             if sim_type == "newton":
-                sx, sy = field_x, field_y
-                for i in range(grid_size):
-                    for j in range(grid_size):
-                        if len(positions) >= bump_count:
-                            break
-                        cx = -sx / 2 + (j + 1) * sx / (grid_size + 1)
-                        base_sp = sy / (grid_size + 1)
-                        cy = -sy / 2 + (i + 1) * base_sp + i * base_sp * 0.3
-                        cy = float(np.clip(cy, -0.45 * sy, 0.45 * sy))
-                        positions.append((cx, cy))
+                px = (cx_m / field_x) + 0.5
+                py = 1.0 - ((cy_m / field_y) + 0.5)
             else:
-                sx, sy = field_x, field_y
-                for i in range(grid_size):
-                    for j in range(grid_size):
-                        if len(positions) >= bump_count:
-                            break
-                        cx = (j + 1) * sx / (grid_size + 1)
-                        cy = (i + 1) * sy / (grid_size + 1)
-                        positions.append((cx, cy))
-
-        for cx_m, cy_m in positions[:bump_count]:
-            if sim_type == "newton":
-                px, py, pw, ph = phys_to_norm_newton(cx_m, cy_m, r_m)
-            else:
-                px, py, pw, ph = phys_to_norm_wedge(cx_m, cy_m, r_m)
-
-            # 适度留白 5%（相对于 bump 直径）
-            pad = max(pw, ph) * 0.05
-            pw = min(1.0, pw + pad * 2)
-            ph = min(1.0, ph + pad * 2)
-
-            # 裁剪到 [0,1]
+                px = cx_m / field_x
+                py = 1.0 - (cy_m / field_y)
+            pw = float(np.clip((2 * radius_m) / field_x, 0.01, 1.0))
+            ph = float(np.clip((2 * radius_m) / field_y, 0.01, 1.0))
             px = float(np.clip(px, pw / 2, 1 - pw / 2))
             py = float(np.clip(py, ph / 2, 1 - ph / 2))
-            pw = float(np.clip(pw, 0.01, 1.0))
-            ph = float(np.clip(ph, 0.01, 1.0))
 
-            labels.append(f"{cls_id} {px:.6f} {py:.6f} {pw:.6f} {ph:.6f}")
+            bx1 = int(round((px - pw / 2) * img_w))
+            by1 = int(round((py - ph / 2) * img_h))
+            bx2 = int(round((px + pw / 2) * img_w))
+            by2 = int(round((py + ph / 2) * img_h))
+            refined = _refine_local_bbox_from_diff(img, ideal_img, (bx1, by1, bx2, by2))
+            line = _bbox_line_from_xyxy(cls_id, img_w, img_h, refined if refined is not None else (bx1, by1, bx2, by2))
+            if line:
+                labels.append(line)
 
     elif cls_id == 4:
-        # 头发丝遮挡：路径随机，无法解析，用全图弱标签
-        write_weak_label(label_path, cls_id)
-        return
+        hair_mask = _safe_mask(meta.get("hair_mask"), meta.get("hair_mask_shape"))
+        if hair_mask is not None:
+            if hair_mask.shape != (img_h, img_w):
+                hair_mask = cv2.resize(hair_mask, (img_w, img_h), interpolation=cv2.INTER_NEAREST)
+            labels.extend(_mask_to_yolo_boxes((hair_mask > 0.1).astype(np.uint8), cls_id, min_area=12))
 
+    labels = _deduplicate_yolo_lines(labels)
     if not labels:
         write_weak_label(label_path, cls_id)
-    else:
-        label_path.write_text("\n".join(labels) + "\n", encoding="utf-8")
+        return
+    label_path.write_text("\n".join(labels) + "\n", encoding="utf-8")
 
-def generate_yolo_labels_diff(defect_img_path: Path, ideal_img_path: Path | None, cls_id: int, label_path: Path, meta: dict | None = None) -> None:
-    """差分图标注：用于表面划痕（cls=0）。理想图路径可选，为 None 时用弱标签。"""
+
+def generate_yolo_labels_diff(
+    defect_img_path: Path,
+    ideal_img_path: Path | None,
+    cls_id: int,
+    label_path: Path,
+    meta: dict | None = None,
+) -> None:
+    meta = meta or {}
+
+    if cls_id == 0:
+        scratch_mask = _safe_mask(meta.get("manual_scratch_mask"), meta.get("manual_scratch_mask_shape"))
+        if scratch_mask is not None:
+            defect_img = _load_image_unicode(defect_img_path)
+            if defect_img is not None:
+                h, w = defect_img.shape[:2]
+                if scratch_mask.shape != (h, w):
+                    scratch_mask = cv2.resize(scratch_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+                labels = _mask_to_yolo_boxes((scratch_mask > 0.08).astype(np.uint8), cls_id, min_area=10)
+                if labels:
+                    label_path.write_text("\n".join(labels) + "\n", encoding="utf-8")
+                    return
+
     if ideal_img_path is None or not ideal_img_path.exists():
         write_weak_label(label_path, cls_id)
         return
+
     try:
-        # OpenCV不支持中文路径，使用 numpy + imdecode 读取
-        defect_data = np.fromfile(str(defect_img_path), dtype=np.uint8)
-        ideal_data = np.fromfile(str(ideal_img_path), dtype=np.uint8)
-        
-        defect_img = cv2.imdecode(defect_data, cv2.IMREAD_COLOR)
-        ideal_img = cv2.imdecode(ideal_data, cv2.IMREAD_COLOR)
-        
+        defect_img = _load_image_unicode(defect_img_path)
+        ideal_img = _load_image_unicode(ideal_img_path)
         if defect_img is None or ideal_img is None:
             write_weak_label(label_path, cls_id)
             return
 
-        # 智能提取绘图区（Axes）：兼容有/无坐标轴标签的图像
-        def find_plot_bbox(img):
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            mask = (gray < 80).astype(np.uint8)
-            h, w = gray.shape
-            row_sums = np.sum(mask, axis=1)
-            col_sums = np.sum(mask, axis=0)
-
-            # 黑框脊线长度至少占 40%
-            row_peaks = np.where(row_sums > w * 0.4)[0]
-            col_peaks = np.where(col_sums > h * 0.4)[0]
-
-            if len(row_peaks) >= 2 and len(col_peaks) >= 2:
-                return col_peaks[0], row_peaks[0], col_peaks[-1], row_peaks[-1]
-            # 无明显边框时（无坐标轴的纯净图），直接使用全图
-            return 0, 0, w, h
-            
-        x1_d, y1_d, x2_d, y2_d = find_plot_bbox(defect_img)
-        x1_i, y1_i, x2_i, y2_i = find_plot_bbox(ideal_img)
-        
+        x1_d, y1_d, x2_d, y2_d = _find_plot_bbox(defect_img)
+        x1_i, y1_i, x2_i, y2_i = _find_plot_bbox(ideal_img)
         defect_plot = defect_img[y1_d:y2_d, x1_d:x2_d]
         ideal_plot = ideal_img[y1_i:y2_i, x1_i:x2_i]
-        
-        if defect_plot.shape[0] == 0 or defect_plot.shape[1] == 0:
+        if defect_plot.size == 0 or ideal_plot.size == 0:
             write_weak_label(label_path, cls_id)
             return
 
-        # 强制对齐绘图区
-        ideal_plot_resized = cv2.resize(ideal_plot, (defect_plot.shape[1], defect_plot.shape[0]))
-
-        # 只在纯净的干涉图区域做差分
-        diff = cv2.absdiff(defect_plot, ideal_plot_resized)
+        ideal_plot = cv2.resize(ideal_plot, (defect_plot.shape[1], defect_plot.shape[0]))
+        diff = cv2.absdiff(defect_plot, ideal_plot)
         gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-        
-        # 灰尘亮度差更弱，单独降低阈值
+        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+
         thresh_val = 3 if cls_id == 3 else 8
         _, thresh = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
 
-        # 根据图像尺寸自适应形态学核大小
-        # 牛顿环图像约 750×750，劈尖图像约 750×375，核大小按比例缩放
         img_short = min(defect_img.shape[:2])
-        # 闭运算：连接断裂的差异区域，核大小约为图像短边的 1.5%
         close_k = max(5, int(img_short * 0.015))
-        kernel_close = np.ones((close_k, close_k), np.uint8)
-        thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel_close)
-
-        # 膨胀：适度扩大检测区域，核大小约为图像短边的 2%（比之前的 30×30 小很多）
         dilate_k = max(6, int(img_short * 0.02))
-        kernel_dilate = np.ones((dilate_k, dilate_k), np.uint8)
-        thresh = cv2.dilate(thresh, kernel_dilate, iterations=1)
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((close_k, close_k), np.uint8))
+        thresh = cv2.dilate(thresh, np.ones((dilate_k, dilate_k), np.uint8), iterations=1)
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
         h_d, w_d = defect_img.shape[:2]
-        labels = []
+        labels: list[str] = []
         for c in contours:
             x, y, w, h = cv2.boundingRect(c)
-            # 过滤极小的干扰噪点（面积过滤更可靠）
-            if w > 6 and h > 6 and w * h > 100:
-                # 映射回原图坐标
-                x_full = x + x1_d
-                y_full = y + y1_d
+            if w <= 6 or h <= 6 or w * h <= 100:
+                continue
+            x_full = x + x1_d
+            y_full = y + y1_d
+            padding = max(8, int(img_short * 0.01))
+            box = (
+                max(0, x_full - padding),
+                max(0, y_full - padding),
+                min(w_d, x_full + w + padding),
+                min(h_d, y_full + h + padding),
+            )
+            line = _bbox_line_from_xyxy(cls_id, w_d, h_d, box)
+            if line:
+                labels.append(line)
 
-                # 适度留白：约为图像短边的 1%，比之前的固定 24px 更合理
-                padding = max(8, int(img_short * 0.01))
-                bx1 = max(0, x_full - padding)
-                by1 = max(0, y_full - padding)
-                bx2 = min(w_d, x_full + w + padding)
-                by2 = min(h_d, y_full + h + padding)
-                
-                w_box = bx2 - bx1
-                h_box = by2 - by1
-                
-                x_center = (bx1 + w_box / 2.0) / w_d
-                y_center = (by1 + h_box / 2.0) / h_d
-                w_norm = w_box / float(w_d)
-                h_norm = h_box / float(h_d)
-                
-                labels.append(f"{cls_id} {x_center:.6f} {y_center:.6f} {w_norm:.6f} {h_norm:.6f}")
-
+        labels = _deduplicate_yolo_lines(labels)
         if not labels:
             write_weak_label(label_path, cls_id)
-        else:
-            label_path.write_text("\n".join(labels) + "\n", encoding="utf-8")
+            return
+        label_path.write_text("\n".join(labels) + "\n", encoding="utf-8")
     except Exception as e:
         print(f"Error processing {defect_img_path.name}: {e}")
         write_weak_label(label_path, cls_id)
+
+
+def _copy_real_label_with_cleanup(src_label: Path, dst_label: Path) -> None:
+    try:
+        lines = _deduplicate_yolo_lines(src_label.read_text(encoding="utf-8").splitlines())
+        if not lines:
+            dst_label.write_text("", encoding="utf-8")
+        else:
+            dst_label.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except Exception:
+        shutil.copy2(src_label, dst_label)
+
+
+def _load_meta_for_image(img_path: Path) -> dict:
+    json_path = img_path.parent / img_path.name.replace("_有瑕疵干涉图.png", "_参数.json")
+    if not json_path.exists():
+        json_path = img_path.parent / f"{img_path.stem}_参数.json"
+    if not json_path.exists():
+        return {}
+    try:
+        return json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
 def copy_and_label(
@@ -463,34 +564,55 @@ def copy_and_label(
             preprocess=bool(preprocess_real and sample_sim_type == "real"),
         )
 
-        # 读取对应的 JSON meta（用于解析标注）
-        json_path = img_path.parent / img_path.name.replace("_有瑕疵干涉图.png", "_参数.json")
-        # 真实数据的 JSON 文件名格式不同
-        if not json_path.exists():
-            json_path = img_path.parent / f"{img_path.stem}_参数.json"
-        meta: dict = {}
-        if json_path.exists():
-            try:
-                with json_path.open("r", encoding="utf-8") as f:
-                    meta = json.load(f)
-            except Exception:
-                meta = {}
-
+        meta = _load_meta_for_image(img_path)
         sim_type = meta.get("sim_type", sample_sim_type)
 
-        # 真实数据：检查是否有预生成的标注文件（来自 merge_real_data.py）
         if sim_type == "real":
             pre_label = img_path.parent.parent / "labels" / f"{img_path.stem}.txt"
             if pre_label.exists():
-                shutil.copy2(pre_label, out_lbl)
+                _copy_real_label_with_cleanup(pre_label, out_lbl)
             else:
                 write_weak_label(out_lbl, cls_id)
         elif cls_id in (0, 3):
-            # 表面划痕/灰尘污染：差分图标注
             generate_yolo_labels_diff(img_path, ideal_path, cls_id, out_lbl, meta)
         else:
-            # 小凸起/小凹陷/头发丝：解析标注
-            generate_analytic_labels(img_path, meta, cls_id, out_lbl)
+            generate_analytic_labels(img_path, ideal_path, meta, cls_id, out_lbl)
+
+
+def write_small_target_manifest(
+    samples: list[tuple[Path, Path, int, str]],
+    output_dir: Path,
+    train_ids: set[int],
+    val_ids: set[int],
+    test_ids: set[int],
+) -> None:
+    records: list[dict] = []
+    for idx, (img_path, _ideal_path, cls_id, sample_sim_type) in enumerate(samples):
+        if cls_id not in (1, 2):
+            continue
+        meta = _load_meta_for_image(img_path)
+        bump_height = float(meta.get("bump_height", 999))
+        bump_radius_mm = float(meta.get("bump_radius_mm", 999))
+        if bump_height > 0.08 and bump_radius_mm > 3.0:
+            continue
+        split = "train" if idx in train_ids else ("val" if idx in val_ids else "test")
+        records.append(
+            {
+                "image": f"images/{split}/{img_path.name}",
+                "label": f"labels/{split}/{img_path.stem}.txt",
+                "split": split,
+                "class_id": cls_id,
+                "class_name": "bump" if cls_id == 1 else "dent",
+                "sim_type": meta.get("sim_type", sample_sim_type),
+                "bump_height": bump_height,
+                "bump_radius_mm": bump_radius_mm,
+                "expected_count": int(meta.get("bump_count", 1)),
+            }
+        )
+    (output_dir / "metadata" / "small_target_eval.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def write_yaml(output_dir: Path) -> None:
@@ -542,6 +664,7 @@ def main() -> None:
         test_ids,
         preprocess_real=args.preprocess_real,
     )
+    write_small_target_manifest(samples, output_dir, train_ids, val_ids, test_ids)
     write_yaml(output_dir)
 
     print("Split finished")
@@ -552,6 +675,7 @@ def main() -> None:
     print(f"Val: {len(val_ids)}")
     print(f"Test: {len(test_ids)}")
     print(f"YAML: {output_dir / 'dataset.yaml'}")
+    print(f"Small-target manifest: {output_dir / 'metadata' / 'small_target_eval.json'}")
 
 
 if __name__ == "__main__":

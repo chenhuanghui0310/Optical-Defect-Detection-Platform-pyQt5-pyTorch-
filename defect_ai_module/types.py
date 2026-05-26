@@ -16,6 +16,7 @@ class DefectPrediction:
 class DefectDetectionResult:
     predictions: list[DefectPrediction]
     output_image: str
+    summary: dict | None = None
 
     @property
     def top_prediction(self) -> DefectPrediction | None:
@@ -44,4 +45,5 @@ class DefectDetectionResult:
             if top
             else None,
             "output_image": self.output_image,
+            "summary": self.summary or {},
         }

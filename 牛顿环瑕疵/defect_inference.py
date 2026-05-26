@@ -31,6 +31,7 @@ class DefectInferenceEngine:
         conf: float = 0.25,
         iou: float = 0.7,
         device: str = "0",
+        **kwargs,
     ) -> dict[str, Any]:
         result = self._service.predict_image(
             image_path=image_path,
@@ -38,5 +39,6 @@ class DefectInferenceEngine:
             iou=iou,
             device=device,
             save_visualization=True,
+            **kwargs,
         )
         return result.to_legacy_dict()

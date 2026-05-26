@@ -718,3 +718,75 @@ class DefectInterferenceWindow(QMainWindow):
         if hasattr(self.control_panel, 'update_defect_controls_visibility'):
             self.control_panel.update_defect_controls_visibility()
 
+
+def _codex_format_detection_result(self, result):
+    predictions = result.get("predictions", [])
+    output_image = result.get("output_image", "")
+    summary = result.get("summary", {}) or {}
+    if hasattr(self, "image_container") and output_image:
+        self.image_container.show_ai_result_image(output_image)
+    if not predictions:
+        self.statusBar().showMessage("检测完成 - 未检测到明显目标")
+        return "未检测到明显目标\n"
+    top_pred = predictions[0]
+    label_cn = top_pred.get("label_cn", top_pred.get("label", "未知"))
+    conf = float(top_pred.get("confidence", 0.0))
+    self.statusBar().showMessage(f"检测完成 - 最高置信类别: {label_cn}，置信度: {conf:.2%}")
+    lines = []
+    if summary.get("expected_label_cn"):
+        lines.append(f"期望类别: {summary.get('expected_label_cn')}")
+    if summary.get("expected_count") is not None:
+        lines.append(f"期望数量: {summary.get('expected_count')}")
+    if summary.get("detected_count_expected") is not None:
+        lines.append(f"同类检测数量: {summary.get('detected_count_expected')}")
+    if summary.get("count_match") is not None:
+        lines.append(f"数量是否匹配: {'是' if summary.get('count_match') else '否'}")
+    lines.append(f"最高置信类别: {label_cn}")
+    lines.append(f"最高置信度: {conf:.2%}")
+    lines.append("全部检测结果:")
+    for index, pred in enumerate(predictions, start=1):
+        pred_label = pred.get("label_cn", pred.get("label", "未知"))
+        pred_conf = float(pred.get("confidence", 0.0))
+        lines.append(f"{index}. {pred_label} | 置信度 {pred_conf:.2%} | 框 {pred.get('bbox_xyxy')}")
+    return "\n".join(lines) + "\n"
+
+
+def _codex_run_defect_detection(self, defect_image_path):
+    try:
+        expected_label = getattr(self.params, "defect_type", None)
+        expected_count = None
+        simulation_targets = None
+        if expected_label in ["小突起", "小凸起", "小凹陷"]:
+            expected_count = int(getattr(self.params, "bump_count", 1))
+            radius_m = float(getattr(self.params, "bump_radius_mm", 2.4)) * 1e-3
+            screen_x = float(getattr(self.params, "screen_length_x", 0.006))
+            screen_y = float(getattr(self.params, "screen_length_y", 0.006))
+            positions = list(getattr(self.params, "generated_bump_positions", []) or [])
+            simulation_targets = [
+                {
+                    "x": float(x),
+                    "y": float(y),
+                    "radius": radius_m,
+                    "x_min": -screen_x / 2.0,
+                    "x_max": screen_x / 2.0,
+                    "y_min": -screen_y / 2.0,
+                    "y_max": screen_y / 2.0,
+                }
+                for x, y in positions[:expected_count]
+            ]
+        result = self.inference_engine.predict_image(
+            defect_image_path,
+            expected_ui_label=expected_label,
+            expected_count=expected_count,
+            simulation_targets=simulation_targets,
+        )
+        return self._format_detection_result(result)
+    except Exception as e:
+        print(f"自动检测错误: {e}")
+        self.statusBar().showMessage("检测失败，请检查模型路径或环境")
+        return f"检测失败: {e}"
+
+
+DefectInterferenceWindow._format_detection_result = _codex_format_detection_result
+DefectInterferenceWindow.run_defect_detection = _codex_run_defect_detection
+

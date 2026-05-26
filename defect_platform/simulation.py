@@ -15,6 +15,17 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
+from defect_labels import (
+    UI_DEFECT_NONE,
+    UI_DEFECT_SCRATCH,
+    UI_DEFECT_BUMP,
+    UI_DEFECT_DENT,
+    UI_DEFECT_DUST,
+    UI_DEFECT_HAIR,
+    to_internal_defect_label,
+    to_internal_scratch_label,
+    to_ui_defect_label,
+)
 
 # 确保父目录在 sys.path 中
 _ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +47,20 @@ _DEFECT_NAME_MAP = {
 def _normalize_defect_name(name: str) -> str:
     """将对外统一命名转换为物理仿真内部名称"""
     return _DEFECT_NAME_MAP.get(name, name)
+
+
+DEFECT_TYPES = [
+    UI_DEFECT_NONE,
+    UI_DEFECT_SCRATCH,
+    UI_DEFECT_BUMP,
+    UI_DEFECT_DENT,
+    UI_DEFECT_DUST,
+    UI_DEFECT_HAIR,
+]
+
+
+def _normalize_defect_name(name: str) -> str:
+    return to_internal_defect_label(name)
 
 
 class DefectSimulator:

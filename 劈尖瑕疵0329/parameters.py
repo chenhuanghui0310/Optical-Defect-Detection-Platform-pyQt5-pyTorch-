@@ -718,6 +718,13 @@ class SimulationParameters:
 
     def export_parameters(self):
         """导出参数为字典"""
+        hair_mask = getattr(self, "hair_mask", None)
+        hair_mask_list = hair_mask.astype(np.uint8).tolist() if hair_mask is not None else None
+        scratch_mask_list = (
+            self.manual_scratch_mask.astype(float).tolist()
+            if self.manual_scratch_mask is not None
+            else None
+        )
         return {
             'lambda_nm': self.lambda_nm,
             'd0_um': self.d0_um,
@@ -739,7 +746,11 @@ class SimulationParameters:
             'dust_density': self.dust_density,
             'brush_size': self.brush_size,
             'brush_depth': self.brush_depth,
-            'eraser_mode': self.eraser_mode
+            'eraser_mode': self.eraser_mode,
+            'hair_mask_shape': list(hair_mask.shape) if hair_mask is not None else None,
+            'hair_mask': hair_mask_list,
+            'manual_scratch_mask_shape': list(self.manual_scratch_mask.shape) if self.manual_scratch_mask is not None else None,
+            'manual_scratch_mask': scratch_mask_list,
         }
 
     def import_parameters(self, params_dict):

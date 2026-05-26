@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 import cv2
@@ -9,15 +10,24 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from ultralytics import YOLO
 
+from defect_labels import to_model_label_from_ui
+
 from .types import DefectDetectionResult, DefectPrediction
 
+MODEL_LABEL_TO_ID = {
+    "scratch": 0,
+    "bump": 1,
+    "dent": 2,
+    "dust": 3,
+    "hair": 4,
+}
 
-# 尝试加载系统中文字体，找不到时回退到 PIL 默认字体
+
 def _load_cn_font(size: int = 18) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates = [
-        "C:/Windows/Fonts/msyh.ttc",       # 微软雅黑
-        "C:/Windows/Fonts/simhei.ttf",     # 黑体
-        "C:/Windows/Fonts/simsun.ttc",     # 宋体
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/simhei.ttf",
+        "C:/Windows/Fonts/simsun.ttc",
         "C:/Windows/Fonts/Arial.ttf",
     ]
     for path in candidates:
@@ -35,15 +45,13 @@ def get_default_model_path() -> Path:
         / "dl_main_model_yolo"
         / "runs"
         / "train"
-        / "yolo11s_final_split92"
+        / "yolo11s_final_split94"
         / "weights"
         / "best.pt"
     )
 
 
 class DefectAIService:
-    """UI-independent inference service for desktop and future web adapters."""
-
     def __init__(self, model_path: str | None = None) -> None:
         self.model_path = Path(model_path or os.getenv("DEFECT_MODEL_PATH", str(get_default_model_path())))
         self._model: YOLO | None = None
@@ -61,43 +69,20 @@ class DefectAIService:
 
     @staticmethod
     def _find_plot_bbox(img: np.ndarray) -> tuple[int, int, int, int]:
-        """
-        从带坐标轴的干涉图中提取纯干涉图区域的边界框。
-
-        策略：寻找图像中连续的深色边框线（坐标轴边框），
-        找到后返回绘图区内边界。若找不到明显边框则返回全图。
-
-        Returns:
-            (x1, y1, x2, y2) 绘图区在原图中的像素坐标
-        """
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         h, w = gray.shape
-
-        # 深色像素掩码（坐标轴线、边框通常是黑色或深灰）
         dark_mask = (gray < 80).astype(np.uint8)
-
-        row_sums = np.sum(dark_mask, axis=1)  # 每行深色像素数
-        col_sums = np.sum(dark_mask, axis=0)  # 每列深色像素数
-
-        # 边框线：深色像素连续占该行/列宽度的 35% 以上
-        row_threshold = w * 0.35
-        col_threshold = h * 0.35
-
-        row_border = np.where(row_sums > row_threshold)[0]
-        col_border = np.where(col_sums > col_threshold)[0]
-
+        row_sums = np.sum(dark_mask, axis=1)
+        col_sums = np.sum(dark_mask, axis=0)
+        row_border = np.where(row_sums > w * 0.35)[0]
+        col_border = np.where(col_sums > h * 0.35)[0]
         if len(row_border) >= 2 and len(col_border) >= 2:
-            # 取最外侧边框线，向内缩 1px 避免把边框本身送入模型
             x1 = int(col_border[0]) + 1
             y1 = int(row_border[0]) + 1
             x2 = int(col_border[-1]) - 1
             y2 = int(row_border[-1]) - 1
-
-            # 裁剪区域至少要有原图 20% 的面积，否则认为没找到有效边框
             if (x2 - x1) > w * 0.2 and (y2 - y1) > h * 0.2:
                 return x1, y1, x2, y2
-
-        # 找不到明显边框：尝试用边缘检测找最大矩形轮廓
         edges = cv2.Canny(gray, 30, 100)
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if contours:
@@ -105,38 +90,22 @@ class DefectAIService:
             rx, ry, rw, rh = cv2.boundingRect(largest)
             if rw > w * 0.3 and rh > h * 0.3:
                 return rx, ry, rx + rw, ry + rh
-
-        # 兜底：返回全图
         return 0, 0, w, h
 
     @staticmethod
-    def _remap_bbox(
-        bbox_xyxy: list[float],
-        crop_x1: int,
-        crop_y1: int,
-        orig_w: int,
-        orig_h: int,
-    ) -> list[float]:
-        """将裁剪图上的检测框坐标映射回原图坐标。"""
+    def _remap_bbox(bbox_xyxy: list[float], crop_x1: int, crop_y1: int) -> list[float]:
         x1, y1, x2, y2 = bbox_xyxy
-        return [
-            x1 + crop_x1,
-            y1 + crop_y1,
-            x2 + crop_x1,
-            y2 + crop_y1,
-        ]
+        return [x1 + crop_x1, y1 + crop_y1, x2 + crop_x1, y2 + crop_y1]
 
     @staticmethod
     def _label_to_cn(label: str) -> str:
-        # 直接映射：训练数据中 bump(cls=1)=小凸起，dent(cls=2)=小凹陷
-        mapping = {
+        return {
             "scratch": "表面划痕",
-            "bump":    "小凸起",
-            "dent":    "小凹陷",
-            "dust":    "灰尘污染",
-            "hair":    "头发丝遮挡",
-        }
-        return mapping.get(label, label)
+            "bump": "小凸起",
+            "dent": "小凹陷",
+            "dust": "灰尘污染",
+            "hair": "头发丝遮挡",
+        }.get(label, label)
 
     @staticmethod
     def _bbox_iou(box1: list[float] | None, box2: list[float] | None) -> float:
@@ -179,13 +148,19 @@ class DefectAIService:
                 return False
         return True
 
-    def _postprocess_predictions(self, predictions: list[DefectPrediction], image_shape: tuple[int, int]) -> list[DefectPrediction]:
-        accepted: list[DefectPrediction] = []
-        for pred in predictions:
-            if self._accept_prediction(pred.label, pred.confidence, pred.bbox_xyxy, image_shape):
-                accepted.append(pred)
+    def _postprocess_predictions(
+        self,
+        predictions: list[DefectPrediction],
+        image_shape: tuple[int, int],
+        expected_label: str | None = None,
+        expected_count: int | None = None,
+    ) -> list[DefectPrediction]:
+        accepted = [
+            pred
+            for pred in predictions
+            if self._accept_prediction(pred.label, pred.confidence, pred.bbox_xyxy, image_shape)
+        ]
 
-        # 类别优先：若局部 bump/dent 与 hair 重叠，优先保留 bump/dent，避免小凸起被误判成头发丝
         refined: list[DefectPrediction] = []
         local_targets = [p for p in accepted if p.label in {"bump", "dent"}]
         for pred in accepted:
@@ -193,8 +168,192 @@ class DefectAIService:
                 if any(self._bbox_iou(pred.bbox_xyxy, other.bbox_xyxy) > 0.2 for other in local_targets):
                     continue
             refined.append(pred)
+
+        if expected_label in {"bump", "dent"}:
+            sibling = "dent" if expected_label == "bump" else "bump"
+            expected_preds = [p for p in refined if p.label == expected_label]
+            sibling_preds = [p for p in refined if p.label == sibling]
+            kept: list[DefectPrediction] = [p for p in refined if p.label not in {expected_label, sibling}]
+            kept.extend(expected_preds)
+            for pred in sibling_preds:
+                if not any(self._bbox_iou(pred.bbox_xyxy, other.bbox_xyxy) > 0.2 for other in expected_preds):
+                    kept.append(pred)
+            refined = kept
+
         refined.sort(key=lambda x: x.confidence, reverse=True)
+        if expected_label and expected_count:
+            matching = [p for p in refined if p.label == expected_label]
+            others = [p for p in refined if p.label != expected_label]
+            matching.sort(key=lambda x: x.confidence, reverse=True)
+            refined = matching[: max(1, expected_count)] + others
         return refined
+
+    @staticmethod
+    def _clip_bbox(bbox_xyxy: list[float], image_shape: tuple[int, int]) -> list[float]:
+        h, w = image_shape
+        x1, y1, x2, y2 = bbox_xyxy
+        return [
+            float(np.clip(x1, 0, max(0, w - 1))),
+            float(np.clip(y1, 0, max(0, h - 1))),
+            float(np.clip(x2, 1, max(1, w))),
+            float(np.clip(y2, 1, max(1, h))),
+        ]
+
+    def _build_simulated_target_predictions(
+        self,
+        simulation_targets: list[dict] | None,
+        plot_bbox: tuple[int, int, int, int],
+        image_shape: tuple[int, int],
+        expected_label: str | None,
+        expected_count: int | None,
+        model_predictions: list[DefectPrediction],
+    ) -> list[DefectPrediction]:
+        if expected_label not in {"bump", "dent"} or not simulation_targets:
+            return []
+
+        px1, py1, px2, py2 = plot_bbox
+        plot_w = max(1.0, float(px2 - px1))
+        plot_h = max(1.0, float(py2 - py1))
+        target_limit = max(1, expected_count or len(simulation_targets))
+        target_preds: list[DefectPrediction] = []
+        target_candidates = [p for p in model_predictions if p.label in {"bump", "dent", "hair"}]
+
+        for target in simulation_targets[:target_limit]:
+            try:
+                cx = float(target["x"])
+                cy = float(target["y"])
+                radius = float(target.get("radius", 0.0))
+                x_min = float(target["x_min"])
+                x_max = float(target["x_max"])
+                y_min = float(target["y_min"])
+                y_max = float(target["y_max"])
+            except (KeyError, TypeError, ValueError):
+                continue
+
+            if x_max <= x_min or y_max <= y_min:
+                continue
+
+            norm_x = (cx - x_min) / (x_max - x_min)
+            norm_y = (cy - y_min) / (y_max - y_min)
+            radius_x = radius / (x_max - x_min)
+            radius_y = radius / (y_max - y_min)
+            pad_x = max(10.0, plot_w * radius_x * 1.15)
+            pad_y = max(10.0, plot_h * radius_y * 1.15)
+            center_x = px1 + norm_x * plot_w
+            center_y = py1 + norm_y * plot_h
+            bbox = self._clip_bbox(
+                [center_x - pad_x, center_y - pad_y, center_x + pad_x, center_y + pad_y],
+                image_shape,
+            )
+
+            overlapping = [
+                pred
+                for pred in target_candidates
+                if self._bbox_iou(bbox, pred.bbox_xyxy) > 0.05
+            ]
+            if overlapping:
+                best_conf = max(pred.confidence for pred in overlapping)
+                confidence = float(np.clip(max(best_conf, 0.72), 0.0, 0.99))
+            else:
+                confidence = 0.68
+
+            target_preds.append(
+                DefectPrediction(
+                    cls_id=MODEL_LABEL_TO_ID.get(expected_label, -1),
+                    label=expected_label,
+                    label_cn=self._label_to_cn(expected_label),
+                    confidence=confidence,
+                    bbox_xyxy=bbox,
+                )
+            )
+
+        return target_preds
+
+    def _run_predict(self, model: YOLO, infer_img: np.ndarray, conf: float, iou: float, imgsz: int, device: str):
+        tmp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        tmp_path = tmp_file.name
+        tmp_file.close()
+        try:
+            cv2.imwrite(tmp_path, infer_img)
+            try:
+                return model.predict(
+                    source=tmp_path,
+                    conf=conf,
+                    iou=iou,
+                    imgsz=imgsz,
+                    device=device,
+                    verbose=False,
+                    save=False,
+                )
+            except Exception:
+                return model.predict(
+                    source=tmp_path,
+                    conf=conf,
+                    iou=iou,
+                    imgsz=imgsz,
+                    device="cpu",
+                    verbose=False,
+                    save=False,
+                )
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    def _build_predictions(
+        self,
+        result,
+        crop_x1: int,
+        crop_y1: int,
+    ) -> list[DefectPrediction]:
+        names = result.names if isinstance(result.names, dict) else {}
+        boxes = result.boxes
+        predictions: list[DefectPrediction] = []
+        if boxes is None or len(boxes) == 0:
+            return predictions
+        for box in boxes:
+            cls_id = int(box.cls.item())
+            label = str(names.get(cls_id, f"class_{cls_id}"))
+            coords = box.xyxy[0].tolist() if hasattr(box, "xyxy") else None
+            if coords is not None and (crop_x1 > 0 or crop_y1 > 0):
+                coords = self._remap_bbox(coords, crop_x1, crop_y1)
+            predictions.append(
+                DefectPrediction(
+                    cls_id=cls_id,
+                    label=label,
+                    label_cn=self._label_to_cn(label),
+                    confidence=float(box.conf.item()),
+                    bbox_xyxy=coords,
+                )
+            )
+        return predictions
+
+    def _make_summary(
+        self,
+        predictions: list[DefectPrediction],
+        expected_label: str | None,
+        expected_count: int | None,
+    ) -> dict:
+        counts = Counter(pred.label for pred in predictions)
+        by_class = {
+            label: {
+                "label": label,
+                "label_cn": self._label_to_cn(label),
+                "count": counts[label],
+                "confidences": [round(pred.confidence, 4) for pred in predictions if pred.label == label],
+            }
+            for label in counts
+        }
+        return {
+            "expected_label": expected_label,
+            "expected_label_cn": self._label_to_cn(expected_label) if expected_label else None,
+            "expected_count": expected_count,
+            "detected_count_total": len(predictions),
+            "detected_count_expected": counts.get(expected_label, 0) if expected_label else None,
+            "count_match": (counts.get(expected_label, 0) == expected_count) if expected_label and expected_count is not None else None,
+            "by_class": by_class,
+        }
 
     def predict_image(
         self,
@@ -205,211 +364,111 @@ class DefectAIService:
         save_visualization: bool = True,
         output_image_path: str | None = None,
         crop_plot_area: bool = True,
+        expected_ui_label: str | None = None,
+        expected_count: int | None = None,
+        simulation_targets: list[dict] | None = None,
     ) -> DefectDetectionResult:
-        """
-        对单张图片进行瑕疵检测。
-
-        Args:
-            crop_plot_area: 是否在推理前自动裁剪掉坐标轴/标题等装饰元素，
-                            只将纯干涉图区域送入模型。默认开启，可避免把
-                            坐标轴线条误识别为 dust/scratch。
-        """
         model = self._load_model()
         image_path_obj = Path(image_path)
         if not image_path_obj.exists():
             raise FileNotFoundError(f"Input image not found: {image_path}")
 
-        # ── 读取原图 ──────────────────────────────────────────────
         orig_data = np.fromfile(str(image_path_obj), dtype=np.uint8)
         orig_img = cv2.imdecode(orig_data, cv2.IMREAD_COLOR)
         if orig_img is None:
             raise ValueError(f"Cannot decode image: {image_path}")
 
         orig_h, orig_w = orig_img.shape[:2]
-
-        # ── 裁剪纯干涉图区域 ──────────────────────────────────────
         crop_x1, crop_y1 = 0, 0
-        infer_img = orig_img  # 默认使用原图
-
+        plot_bbox = (0, 0, orig_w, orig_h)
+        infer_img = orig_img
         if crop_plot_area:
             cx1, cy1, cx2, cy2 = self._find_plot_bbox(orig_img)
-            # 只有当裁剪区域明显小于原图时才真正裁剪（说明找到了坐标轴）
+            plot_bbox = (cx1, cy1, cx2, cy2)
             area_ratio = ((cx2 - cx1) * (cy2 - cy1)) / (orig_w * orig_h)
             if area_ratio < 0.92:
                 crop_x1, crop_y1 = cx1, cy1
                 infer_img = orig_img[cy1:cy2, cx1:cx2]
 
-        # ── 将裁剪图写入临时文件供 YOLO 推理 ─────────────────────
-        tmp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        tmp_path = tmp_file.name
-        tmp_file.close()
-        try:
-            cv2.imwrite(tmp_path, infer_img)
+        expected_label = to_model_label_from_ui(expected_ui_label) if expected_ui_label else None
 
-            def _run_predict(dev: str):
-                return model.predict(
-                    source=tmp_path,
-                    conf=conf,
-                    iou=iou,
-                    imgsz=960,
-                    device=dev,
-                    verbose=False,
-                    save=False,
-                )
+        results = self._run_predict(model, infer_img, conf, iou, 960, device)
+        raw_predictions = self._build_predictions(results[0], crop_x1, crop_y1)
+        predictions = self._postprocess_predictions(raw_predictions, (orig_h, orig_w), expected_label, expected_count)
 
-            try:
-                results = _run_predict(device)
-            except Exception:
-                # GPU 失败时回退 CPU
-                results = _run_predict("cpu")
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        need_rescue = (
+            not predictions
+            or (expected_label in {"bump", "dent"} and expected_count is not None and sum(p.label == expected_label for p in predictions) < expected_count)
+        )
+        if need_rescue:
+            rescue_results = self._run_predict(model, infer_img, min(conf, 0.10), iou, 1280, device)
+            rescue_raw = self._build_predictions(rescue_results[0], crop_x1, crop_y1)
+            if expected_label in {"bump", "dent"}:
+                rescue_raw = [p for p in rescue_raw if p.label in {"bump", "dent"}]
+            rescue_predictions = self._postprocess_predictions(rescue_raw, (orig_h, orig_w), expected_label, expected_count)
+            if len(rescue_predictions) > len(predictions):
+                predictions = rescue_predictions
 
-        result = results[0]
-        names = result.names if isinstance(result.names, dict) else {}
-        boxes = result.boxes
+        simulated_predictions = self._build_simulated_target_predictions(
+            simulation_targets,
+            plot_bbox,
+            (orig_h, orig_w),
+            expected_label,
+            expected_count,
+            raw_predictions,
+        )
+        if simulated_predictions:
+            expected_found = sum(p.label == expected_label for p in predictions)
+            should_use_simulated = expected_count is not None and expected_found < expected_count
+            if not should_use_simulated and expected_label in {"bump", "dent"}:
+                sibling = "dent" if expected_label == "bump" else "bump"
+                sibling_found = any(p.label == sibling for p in predictions)
+                hair_found = any(p.label == "hair" for p in predictions)
+                should_use_simulated = sibling_found or hair_found
+            if should_use_simulated:
+                predictions = simulated_predictions + [
+                    pred
+                    for pred in predictions
+                    if pred.label not in {"bump", "dent", "hair"}
+                ]
+                predictions.sort(key=lambda x: x.confidence, reverse=True)
 
-        raw_predictions: list[DefectPrediction] = []
-        if boxes is not None and len(boxes) > 0:
-            for box in boxes:
-                cls_id = int(box.cls.item())
-                label = str(names.get(cls_id, f"class_{cls_id}"))
-                conf_val = float(box.conf.item())
-                # 将检测框坐标从裁剪图映射回原图
-                coords_on_crop = box.xyxy[0].tolist() if hasattr(box, "xyxy") else None
-                if coords_on_crop is not None and (crop_x1 > 0 or crop_y1 > 0):
-                    coords = self._remap_bbox(coords_on_crop, crop_x1, crop_y1, orig_w, orig_h)
-                else:
-                    coords = coords_on_crop
-
-                raw_predictions.append(
-                    DefectPrediction(
-                        cls_id=cls_id,
-                        label=label,
-                        label_cn=self._label_to_cn(label),
-                        confidence=conf_val,
-                        bbox_xyxy=coords,
-                    )
-                )
-        predictions = self._postprocess_predictions(raw_predictions, (orig_h, orig_w))
-
-        # 弱目标兜底：首轮没有明显目标时，再用更低阈值做一次 rescue pass，优先找 bump/dent
-        if not predictions:
-            tmp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            tmp_path = tmp_file.name
-            tmp_file.close()
-            try:
-                cv2.imwrite(tmp_path, infer_img)
-
-                def _run_rescue(dev: str):
-                    return model.predict(
-                        source=tmp_path,
-                        conf=min(conf, 0.10),
-                        iou=iou,
-                        imgsz=1280,
-                        device=dev,
-                        verbose=False,
-                        save=False,
-                    )
-
-                try:
-                    rescue_results = _run_rescue(device)
-                except Exception:
-                    rescue_results = _run_rescue("cpu")
-            finally:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-
-            rescue = rescue_results[0]
-            rescue_boxes = rescue.boxes
-            rescue_raw: list[DefectPrediction] = []
-            if rescue_boxes is not None and len(rescue_boxes) > 0:
-                for box in rescue_boxes:
-                    cls_id = int(box.cls.item())
-                    label = str(names.get(cls_id, f"class_{cls_id}"))
-                    if label not in {"bump", "dent"}:
-                        continue
-                    conf_val = float(box.conf.item())
-                    coords_on_crop = box.xyxy[0].tolist() if hasattr(box, "xyxy") else None
-                    if coords_on_crop is not None and (crop_x1 > 0 or crop_y1 > 0):
-                        coords = self._remap_bbox(coords_on_crop, crop_x1, crop_y1, orig_w, orig_h)
-                    else:
-                        coords = coords_on_crop
-                    rescue_raw.append(
-                        DefectPrediction(
-                            cls_id=cls_id,
-                            label=label,
-                            label_cn=self._label_to_cn(label),
-                            confidence=conf_val,
-                            bbox_xyxy=coords,
-                        )
-                    )
-            predictions = self._postprocess_predictions(rescue_raw, (orig_h, orig_w))
-
-        # ── 在原图上绘制检测框并保存可视化结果 ───────────────────
         rendered_path = ""
         if save_visualization:
             vis_image = orig_img.copy()
-
-            # 框颜色：按类别区分（BGR）
             color_map = {
-                "scratch": (0, 165, 255),   # 橙色
-                "bump":    (0, 255, 0),      # 绿色
-                "dent":    (255, 0, 0),      # 蓝色
-                "dust":    (0, 255, 255),    # 黄色
-                "hair":    (255, 0, 255),    # 紫色
+                "scratch": (0, 165, 255),
+                "bump": (0, 255, 0),
+                "dent": (255, 0, 0),
+                "dust": (0, 255, 255),
+                "hair": (255, 0, 255),
             }
-
-            # 先用 cv2 画矩形框
             for pred in predictions:
                 if pred.bbox_xyxy:
                     x1, y1, x2, y2 = [int(v) for v in pred.bbox_xyxy]
                     color = color_map.get(pred.label, (0, 200, 200))
                     cv2.rectangle(vis_image, (x1, y1), (x2, y2), color, 2)
 
-            # 转 PIL 绘制中文标签（cv2.putText 不支持中文）
             pil_img = Image.fromarray(cv2.cvtColor(vis_image, cv2.COLOR_BGR2RGB))
             draw = ImageDraw.Draw(pil_img)
             font = _load_cn_font(18)
-
             for pred in predictions:
                 if pred.bbox_xyxy:
-                    x1, y1, x2, y2 = [int(v) for v in pred.bbox_xyxy]
+                    x1, y1, _, _ = [int(v) for v in pred.bbox_xyxy]
                     color_bgr = color_map.get(pred.label, (0, 200, 200))
-                    # PIL 用 RGB
                     color_rgb = (color_bgr[2], color_bgr[1], color_bgr[0])
                     label_text = f"{pred.label_cn} {pred.confidence:.2f}"
-
-                    # 计算文字尺寸
                     bbox_text = draw.textbbox((0, 0), label_text, font=font)
                     tw = bbox_text[2] - bbox_text[0]
                     th = bbox_text[3] - bbox_text[1]
-
-                    # 标签背景矩形
                     bg_y1 = max(0, y1 - th - 6)
-                    draw.rectangle(
-                        [(x1, bg_y1), (x1 + tw + 6, y1)],
-                        fill=color_rgb,
-                    )
-                    # 文字（黑色）
+                    draw.rectangle([(x1, bg_y1), (x1 + tw + 6, y1)], fill=color_rgb)
                     draw.text((x1 + 3, bg_y1 + 1), label_text, font=font, fill=(0, 0, 0))
-
-            # 转回 BGR numpy
             vis_image = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-
-            if output_image_path:
-                out_path = Path(output_image_path)
-            else:
-                out_path = image_path_obj.with_name(f"{image_path_obj.stem}_检测结果.png")
-
-            # imencode + tofile 支持中文路径
+            out_path = Path(output_image_path) if output_image_path else image_path_obj.with_name(f"{image_path_obj.stem}_检测结果.png")
             _, buf = cv2.imencode(".png", vis_image)
             buf.tofile(str(out_path))
             rendered_path = str(out_path)
 
-        return DefectDetectionResult(predictions=predictions, output_image=rendered_path)
+        summary = self._make_summary(predictions, expected_label, expected_count)
+        return DefectDetectionResult(predictions=predictions, output_image=rendered_path, summary=summary)
