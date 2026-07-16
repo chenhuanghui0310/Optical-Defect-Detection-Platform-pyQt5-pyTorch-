@@ -28,6 +28,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clean", action="store_true")
     parser.add_argument("--preprocess-real", action="store_true")
     parser.add_argument("--max-real-train-ratio", type=float, default=1.0)
+    parser.add_argument(
+        "--sim-types",
+        nargs="+",
+        choices=("wedge", "newton", "real"),
+        default=None,
+        help="Optional experiment-domain filter, for example: --sim-types wedge.",
+    )
+    parser.add_argument("--min-wavelength-nm", type=float, default=None)
+    parser.add_argument("--max-wavelength-nm", type=float, default=None)
+    parser.add_argument(
+        "--balance-train",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Oversample only valid, underrepresented training classes after labels are built.",
+    )
+    parser.add_argument(
+        "--max-boxes-per-image",
+        type=int,
+        default=12,
+        help="Maximum retained boxes of a single class in one image; 0 disables the cap.",
+    )
     return parser.parse_args()
 
 
@@ -58,7 +79,12 @@ def defect_to_cls(defect_type: str) -> int:
     return mapping[defect_type]
 
 
-def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int, str]]:
+def collect_samples(
+    source_dir: Path,
+    allowed_sim_types: set[str] | None = None,
+    min_wavelength_nm: float | None = None,
+    max_wavelength_nm: float | None = None,
+) -> list[tuple[Path, Path, int, str]]:
     samples: list[tuple[Path, Path, int, str]] = []
     skipped_unknown = 0
     for json_path in sorted(source_dir.glob("*_参数.json")):
@@ -69,6 +95,17 @@ def collect_samples(source_dir: Path) -> list[tuple[Path, Path, int, str]]:
         if sim_type == "unknown":
             skipped_unknown += 1
             continue
+        if allowed_sim_types and sim_type not in allowed_sim_types:
+            continue
+        if min_wavelength_nm is not None or max_wavelength_nm is not None:
+            try:
+                wavelength_nm = float(meta["lambda_nm"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if min_wavelength_nm is not None and wavelength_nm < min_wavelength_nm:
+                continue
+            if max_wavelength_nm is not None and wavelength_nm > max_wavelength_nm:
+                continue
 
         defect_type = meta.get("defect_type")
         if not defect_type:
@@ -152,7 +189,13 @@ def split_indices(
 
 
 def write_weak_label(label_path: Path, cls_id: int) -> None:
-    label_path.write_text(f"{cls_id} 0.5 0.5 1.0 1.0\n", encoding="utf-8")
+    """Record that local labeling failed without fabricating a full-image defect box.
+
+    Full-image fallback boxes caused the detector to learn that broad fringe changes
+    are hair/scratch/dust.  The caller removes the corresponding image from the
+    split, so an empty file is deliberately different from a negative sample.
+    """
+    label_path.write_text("", encoding="utf-8")
 
 
 def _load_image_unicode(path: Path) -> np.ndarray | None:
@@ -203,6 +246,30 @@ def _deduplicate_yolo_lines(lines: list[str], decimals: int = 6) -> list[str]:
     return unique
 
 
+def _limit_boxes_per_class(lines: list[str], max_boxes_per_class: int) -> list[str]:
+    """Keep spatially largest boxes when one dense class overwhelms an image."""
+    if max_boxes_per_class <= 0:
+        return lines
+
+    grouped: dict[int, list[tuple[float, str]]] = {}
+    for line in lines:
+        parts = line.strip().split()
+        if len(parts) < 5:
+            continue
+        try:
+            cls_id = int(float(parts[0]))
+            area = float(parts[3]) * float(parts[4])
+        except ValueError:
+            continue
+        grouped.setdefault(cls_id, []).append((area, line))
+
+    limited: list[str] = []
+    for cls_id in sorted(grouped):
+        entries = sorted(grouped[cls_id], reverse=True)
+        limited.extend(line for _area, line in entries[:max_boxes_per_class])
+    return limited
+
+
 def _mask_to_yolo_boxes(mask: np.ndarray, cls_id: int, min_area: int = 20) -> list[str]:
     contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     h, w = mask.shape[:2]
@@ -237,6 +304,8 @@ def _refine_local_bbox_from_diff(
     defect_img: np.ndarray,
     ideal_img: np.ndarray | None,
     approx_bbox_xyxy: tuple[int, int, int, int],
+    *,
+    focus_shrink: float = 1.0,
 ) -> tuple[int, int, int, int] | None:
     if ideal_img is None:
         return None
@@ -309,6 +378,15 @@ def _refine_local_bbox_from_diff(
         return None
 
     x, y, w, h = best_rect
+    if 0.0 < focus_shrink < 1.0:
+        new_w = max(3, int(round(w * focus_shrink)))
+        new_h = max(3, int(round(h * focus_shrink)))
+        cx = x + w / 2.0
+        cy = y + h / 2.0
+        x = int(round(cx - new_w / 2.0))
+        y = int(round(cy - new_h / 2.0))
+        w = new_w
+        h = new_h
     pad = max(2, int(round(max(w, h) * 0.12)))
     bx1 = max(dx1, dx1 + lx1 + x - pad)
     by1 = max(dy1, dy1 + ly1 + y - pad)
@@ -317,6 +395,82 @@ def _refine_local_bbox_from_diff(
     if bx2 <= bx1 or by2 <= by1:
         return None
     return bx1, by1, bx2, by2
+
+
+def _extract_small_target_boxes_from_diff(
+    defect_img: np.ndarray,
+    ideal_img: np.ndarray | None,
+    *,
+    expected_count: int,
+    focus_shrink: float,
+    min_area: int,
+    max_boxes: int | None = None,
+) -> list[tuple[int, int, int, int]]:
+    if ideal_img is None:
+        return []
+
+    dx1, dy1, dx2, dy2 = _find_plot_bbox(defect_img)
+    ix1, iy1, ix2, iy2 = _find_plot_bbox(ideal_img)
+    defect_plot = defect_img[dy1:dy2, dx1:dx2]
+    ideal_plot = ideal_img[iy1:iy2, ix1:ix2]
+    if defect_plot.size == 0 or ideal_plot.size == 0:
+        return []
+
+    ideal_plot = cv2.resize(ideal_plot, (defect_plot.shape[1], defect_plot.shape[0]))
+    diff = cv2.absdiff(defect_plot, ideal_plot)
+    diff_gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    diff_gray = cv2.GaussianBlur(diff_gray, (5, 5), 0)
+
+    max_val = float(np.max(diff_gray))
+    mean_val = float(np.mean(diff_gray))
+    if max_val < 4.0:
+        return []
+
+    thresh_val = max(4, int(min(max_val * 0.52, mean_val + max(6.0, (max_val - mean_val) * 0.42))))
+    _, binary = cv2.threshold(diff_gray, thresh_val, 255, cv2.THRESH_BINARY)
+
+    kernel_size = max(3, int(round(min(diff_gray.shape[:2]) * 0.01)))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return []
+
+    candidates: list[tuple[float, tuple[int, int, int, int]]] = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        area = w * h
+        if area < min_area:
+            continue
+        roi = diff_gray[y : y + h, x : x + w]
+        if roi.size == 0:
+            continue
+        score = float(np.mean(roi)) * float(np.sqrt(area))
+        bx1 = dx1 + x
+        by1 = dy1 + y
+        bx2 = dx1 + x + w
+        by2 = dy1 + y + h
+        candidates.append((score, (bx1, by1, bx2, by2)))
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
+    boxes: list[tuple[int, int, int, int]] = []
+    img_h, img_w = defect_img.shape[:2]
+    for _score, box in candidates:
+        focused = _focus_box(img_w, img_h, box, shrink=focus_shrink, min_size=8)
+        refined = _refine_local_bbox_from_diff(defect_img, ideal_img, focused, focus_shrink=focus_shrink)
+        final_box = refined if refined is not None else focused
+        boxes.append(final_box)
+        if max_boxes is not None and len(boxes) >= max_boxes:
+            break
+    return boxes
 
 
 def preprocess_real_image(img: np.ndarray) -> np.ndarray:
@@ -367,6 +521,47 @@ def _bbox_line_from_xyxy(cls_id: int, img_w: int, img_h: int, box: tuple[int, in
     return f"{cls_id} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}"
 
 
+def _safe_bump_radius_m(meta: dict, field_x: float, field_y: float) -> float:
+    raw = meta.get("bump_radius_mm", 2.4)
+    try:
+        radius_mm = float(raw)
+    except (TypeError, ValueError):
+        radius_mm = 2.4
+
+    if not np.isfinite(radius_mm) or radius_mm <= 0 or radius_mm >= 100:
+        radius_mm = 2.4
+
+    radius_m = max(0.00005, radius_mm * 1e-3)
+    max_reasonable = min(field_x, field_y) * 0.18
+    return float(np.clip(radius_m, 0.00005, max_reasonable))
+
+
+def _focus_box(
+    img_w: int,
+    img_h: int,
+    box: tuple[int, int, int, int],
+    *,
+    shrink: float,
+    min_size: int,
+) -> tuple[int, int, int, int]:
+    x1, y1, x2, y2 = box
+    w = max(1, x2 - x1)
+    h = max(1, y2 - y1)
+    cx = (x1 + x2) / 2.0
+    cy = (y1 + y2) / 2.0
+    new_w = max(min_size, int(round(w * shrink)))
+    new_h = max(min_size, int(round(h * shrink)))
+    nx1 = int(round(cx - new_w / 2.0))
+    ny1 = int(round(cy - new_h / 2.0))
+    nx2 = int(round(cx + new_w / 2.0))
+    ny2 = int(round(cy + new_h / 2.0))
+    nx1 = max(0, min(img_w - 1, nx1))
+    ny1 = max(0, min(img_h - 1, ny1))
+    nx2 = max(nx1 + 1, min(img_w, nx2))
+    ny2 = max(ny1 + 1, min(img_h, ny2))
+    return nx1, ny1, nx2, ny2
+
+
 def generate_analytic_labels(
     defect_img_path: Path,
     ideal_img_path: Path | None,
@@ -388,34 +583,71 @@ def generate_analytic_labels(
         field_x = 0.006 if sim_type == "newton" else 0.030
         field_y = 0.006 if sim_type == "newton" else 0.015
         bump_count = int(meta.get("bump_count", 1))
-        bump_radius_mm = float(meta.get("bump_radius_mm", 2.4))
-        radius_m = max(0.00005, bump_radius_mm * 1e-3)
+        radius_m = _safe_bump_radius_m(meta, field_x, field_y)
+        position_mode = str(meta.get("bump_position_mode", "")).strip()
         positions = meta.get("generated_bump_positions", [])[:bump_count]
         if not positions:
             positions = meta.get("fixed_bump_positions", [])[:bump_count]
 
-        for cx_m, cy_m in positions:
-            cx_m = float(cx_m)
-            cy_m = float(cy_m)
-            if sim_type == "newton":
-                px = (cx_m / field_x) + 0.5
-                py = 1.0 - ((cy_m / field_y) + 0.5)
-            else:
-                px = cx_m / field_x
-                py = 1.0 - (cy_m / field_y)
-            pw = float(np.clip((2 * radius_m) / field_x, 0.01, 1.0))
-            ph = float(np.clip((2 * radius_m) / field_y, 0.01, 1.0))
-            px = float(np.clip(px, pw / 2, 1 - pw / 2))
-            py = float(np.clip(py, ph / 2, 1 - ph / 2))
+        use_diff_only = ("闅忔満" in position_mode or "随机" in position_mode) and not meta.get("generated_bump_positions")
+        if use_diff_only:
+            candidate_boxes = _extract_small_target_boxes_from_diff(
+                img,
+                ideal_img,
+                expected_count=bump_count,
+                focus_shrink=0.72 if cls_id == 1 else 0.64,
+                min_area=18 if sim_type == "newton" else 24,
+                max_boxes=max(12, bump_count + 2),
+            )
+            # Full-image diff is only trustworthy when the candidate count is close to the expected defect count.
+            candidate_count = len(candidate_boxes)
+            allow_diff_only = (
+                candidate_count >= max(1, int(round(bump_count * 0.6)))
+                and candidate_count <= max(bump_count + 1, int(round(bump_count * 1.6)))
+                and bump_count <= 4
+            )
+            if allow_diff_only:
+                for final_box in candidate_boxes[:bump_count]:
+                    line = _bbox_line_from_xyxy(cls_id, img_w, img_h, final_box)
+                    if line:
+                        labels.append(line)
 
-            bx1 = int(round((px - pw / 2) * img_w))
-            by1 = int(round((py - ph / 2) * img_h))
-            bx2 = int(round((px + pw / 2) * img_w))
-            by2 = int(round((py + ph / 2) * img_h))
-            refined = _refine_local_bbox_from_diff(img, ideal_img, (bx1, by1, bx2, by2))
-            line = _bbox_line_from_xyxy(cls_id, img_w, img_h, refined if refined is not None else (bx1, by1, bx2, by2))
-            if line:
-                labels.append(line)
+        if not labels:
+            for cx_m, cy_m in positions:
+                cx_m = float(cx_m)
+                cy_m = float(cy_m)
+                if sim_type == "newton":
+                    px = (cx_m / field_x) + 0.5
+                    py = 1.0 - ((cy_m / field_y) + 0.5)
+                else:
+                    px = cx_m / field_x
+                    py = 1.0 - (cy_m / field_y)
+                pw = float(np.clip((2 * radius_m) / field_x, 0.01, 1.0))
+                ph = float(np.clip((2 * radius_m) / field_y, 0.01, 1.0))
+                px = float(np.clip(px, pw / 2, 1 - pw / 2))
+                py = float(np.clip(py, ph / 2, 1 - ph / 2))
+
+                bx1 = int(round((px - pw / 2) * img_w))
+                by1 = int(round((py - ph / 2) * img_h))
+                bx2 = int(round((px + pw / 2) * img_w))
+                by2 = int(round((py + ph / 2) * img_h))
+                approx_box = _focus_box(
+                    img_w,
+                    img_h,
+                    (bx1, by1, bx2, by2),
+                    shrink=0.72 if sim_type == "newton" else 0.68,
+                    min_size=8 if sim_type == "newton" else 10,
+                )
+                refined = _refine_local_bbox_from_diff(
+                    img,
+                    ideal_img,
+                    approx_box,
+                    focus_shrink=0.78 if cls_id == 1 else 0.70,
+                )
+                final_box = refined if refined is not None else approx_box
+                line = _bbox_line_from_xyxy(cls_id, img_w, img_h, final_box)
+                if line:
+                    labels.append(line)
 
     elif cls_id == 4:
         hair_mask = _safe_mask(meta.get("hair_mask"), meta.get("hair_mask_shape"))
@@ -477,12 +709,22 @@ def generate_yolo_labels_diff(
         gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
-        thresh_val = 3 if cls_id == 3 else 8
+        # Hair is a thin dark occlusion.  Use a stricter difference threshold than
+        # dust, while preserving its disconnected curve segments for local boxes.
+        thresh_val = 3 if cls_id == 3 else (12 if cls_id == 4 else 8)
         _, thresh = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
 
         img_short = min(defect_img.shape[:2])
-        close_k = max(5, int(img_short * 0.015))
-        dilate_k = max(6, int(img_short * 0.02))
+        if cls_id == 4:
+            close_k = max(3, int(img_short * 0.006))
+            dilate_k = max(3, int(img_short * 0.008))
+        else:
+            close_k = max(5, int(img_short * 0.015))
+            dilate_k = max(6, int(img_short * 0.02))
+        if close_k % 2 == 0:
+            close_k += 1
+        if dilate_k % 2 == 0:
+            dilate_k += 1
         thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, np.ones((close_k, close_k), np.uint8))
         thresh = cv2.dilate(thresh, np.ones((dilate_k, dilate_k), np.uint8), iterations=1)
 
@@ -491,7 +733,8 @@ def generate_yolo_labels_diff(
         labels: list[str] = []
         for c in contours:
             x, y, w, h = cv2.boundingRect(c)
-            if w <= 6 or h <= 6 or w * h <= 100:
+            min_area = 24 if cls_id == 4 else 100
+            if w <= 3 or h <= 3 or w * h <= min_area:
                 continue
             x_full = x + x1_d
             y_full = y + y1_d
@@ -546,6 +789,7 @@ def copy_and_label(
     val_ids: set[int],
     test_ids: set[int],
     preprocess_real: bool = False,
+    max_boxes_per_image: int = 12,
 ) -> None:
     for idx, (img_path, ideal_path, cls_id, sample_sim_type) in enumerate(samples):
         if idx in train_ids:
@@ -573,10 +817,63 @@ def copy_and_label(
                 _copy_real_label_with_cleanup(pre_label, out_lbl)
             else:
                 write_weak_label(out_lbl, cls_id)
-        elif cls_id in (0, 3):
+        elif cls_id in (0, 3, 4):
             generate_yolo_labels_diff(img_path, ideal_path, cls_id, out_lbl, meta)
         else:
             generate_analytic_labels(img_path, ideal_path, meta, cls_id, out_lbl)
+
+        # Never turn an unlocalised defect into a negative or a full-image box.
+        # Such samples are not usable for object detection and must not reach YOLO.
+        lines = _deduplicate_yolo_lines(out_lbl.read_text(encoding="utf-8").splitlines())
+        lines = _limit_boxes_per_class(lines, max_boxes_per_image)
+        if not lines:
+            out_lbl.unlink(missing_ok=True)
+            out_img.unlink(missing_ok=True)
+            continue
+        out_lbl.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def rebalance_training_split(output_dir: Path, seed: int) -> dict[int, int]:
+    """Duplicate valid minority-class training samples without changing evaluation data."""
+    image_dir = output_dir / "images" / "train"
+    label_dir = output_dir / "labels" / "train"
+    by_class: dict[int, list[tuple[Path, Path]]] = {idx: [] for idx in range(5)}
+
+    for label_path in sorted(label_dir.glob("*.txt")):
+        lines = _deduplicate_yolo_lines(label_path.read_text(encoding="utf-8").splitlines())
+        classes = {int(line.split()[0]) for line in lines if line.split()}
+        image_path = image_dir / f"{label_path.stem}.png"
+        if not image_path.exists():
+            matches = list(image_dir.glob(f"{label_path.stem}.*"))
+            image_path = matches[0] if matches else image_path
+        if not image_path.exists():
+            continue
+        for cls_id in classes:
+            by_class.setdefault(cls_id, []).append((image_path, label_path))
+
+    # Dust is naturally multi-instance.  Balance against the largest non-dust
+    # class so it cannot dominate classification gradients by object count.
+    minority_sizes = [len(by_class[idx]) for idx in (0, 1, 2, 4) if by_class[idx]]
+    if not minority_sizes:
+        return {idx: len(items) for idx, items in by_class.items()}
+    target = min(700, max(minority_sizes))
+    rng = random.Random(seed)
+
+    for cls_id in (0, 1, 2, 4):
+        samples = by_class[cls_id]
+        if not samples or len(samples) >= target:
+            continue
+        needed = target - len(samples)
+        for repeat_idx in range(needed):
+            src_image, src_label = samples[repeat_idx % len(samples)]
+            suffix = f"__balanced_{cls_id}_{repeat_idx:04d}"
+            dst_image = image_dir / f"{src_image.stem}{suffix}{src_image.suffix}"
+            dst_label = label_dir / f"{src_label.stem}{suffix}.txt"
+            shutil.copy2(src_image, dst_image)
+            shutil.copy2(src_label, dst_label)
+        rng.shuffle(samples)
+
+    return {idx: len(items) for idx, items in by_class.items()}
 
 
 def write_small_target_manifest(
@@ -596,6 +893,10 @@ def write_small_target_manifest(
         if bump_height > 0.08 and bump_radius_mm > 3.0:
             continue
         split = "train" if idx in train_ids else ("val" if idx in val_ids else "test")
+        output_label = output_dir / "labels" / split / f"{img_path.stem}.txt"
+        output_image = output_dir / "images" / split / img_path.name
+        if not output_label.exists() or not output_image.exists():
+            continue
         records.append(
             {
                 "image": f"images/{split}/{img_path.name}",
@@ -645,7 +946,13 @@ def main() -> None:
 
     ensure_dirs(output_dir)
 
-    samples = collect_samples(source_dir)
+    allowed_sim_types = set(args.sim_types) if args.sim_types else None
+    samples = collect_samples(
+        source_dir,
+        allowed_sim_types,
+        args.min_wavelength_nm,
+        args.max_wavelength_nm,
+    )
     if len(samples) < 2:
         raise RuntimeError("Not enough samples to split. Check source-dir contents.")
 
@@ -663,7 +970,11 @@ def main() -> None:
         val_ids,
         test_ids,
         preprocess_real=args.preprocess_real,
+        max_boxes_per_image=args.max_boxes_per_image,
     )
+    class_counts = {}
+    if args.balance_train:
+        class_counts = rebalance_training_split(output_dir, args.seed)
     write_small_target_manifest(samples, output_dir, train_ids, val_ids, test_ids)
     write_yaml(output_dir)
 
@@ -676,6 +987,8 @@ def main() -> None:
     print(f"Test: {len(test_ids)}")
     print(f"YAML: {output_dir / 'dataset.yaml'}")
     print(f"Small-target manifest: {output_dir / 'metadata' / 'small_target_eval.json'}")
+    if class_counts:
+        print(f"Valid training images before balancing: {class_counts}")
 
 
 if __name__ == "__main__":

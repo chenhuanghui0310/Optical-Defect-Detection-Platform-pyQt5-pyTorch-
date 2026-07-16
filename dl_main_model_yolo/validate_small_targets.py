@@ -8,6 +8,7 @@ from ultralytics import YOLO
 
 
 CLASS_NAME_TO_ID = {"bump": 1, "dent": 2}
+CLASS_ID_TO_NAME = {value: key for key, value in CLASS_NAME_TO_ID.items()}
 
 
 def parse_args() -> argparse.Namespace:
@@ -16,8 +17,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest", type=str, required=True)
     parser.add_argument("--conf", type=float, default=0.10)
     parser.add_argument("--iou", type=float, default=0.70)
+    parser.add_argument(
+        "--match-iou",
+        type=float,
+        default=0.10,
+        help="Minimum IoU required to count a prediction as a matched small target",
+    )
     parser.add_argument("--imgsz", type=int, default=1280)
     parser.add_argument("--device", type=str, default="0")
+    parser.add_argument(
+        "--max-errors",
+        type=int,
+        default=0,
+        help="Limit exported error records; 0 keeps all errors",
+    )
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        default="",
+        help="Optional path to save the validation report as UTF-8 JSON",
+    )
     return parser.parse_args()
 
 
@@ -54,6 +73,21 @@ def bbox_iou(box1, box2) -> float:
     return inter / denom if denom > 0 else 0.0
 
 
+def classify_error(expected_cls_id: int, pred_boxes: list[dict], best_same_class_iou: float, match_iou: float) -> str:
+    if not pred_boxes:
+        return "missed_all"
+    if best_same_class_iou >= match_iou:
+        return "matched"
+
+    predicted_cls_ids = {int(pred["cls_id"]) for pred in pred_boxes}
+    other_small_target_ids = set(CLASS_ID_TO_NAME) - {expected_cls_id}
+    if predicted_cls_ids & other_small_target_ids:
+        return "confused_small_target"
+    if expected_cls_id in predicted_cls_ids:
+        return "localized_poorly"
+    return "wrong_other_class"
+
+
 def main() -> None:
     args = parse_args()
     model = YOLO(args.weights)
@@ -67,6 +101,13 @@ def main() -> None:
     ious = []
     confidences = []
     errors = []
+    confusion = {
+        "matched": 0,
+        "missed_all": 0,
+        "confused_small_target": 0,
+        "localized_poorly": 0,
+        "wrong_other_class": 0,
+    }
 
     for item in manifest:
         image_path = dataset_root / item["image"]
@@ -75,6 +116,18 @@ def main() -> None:
         expected_cls_id = CLASS_NAME_TO_ID[expected_class_name]
         expected_count = int(item.get("expected_count", 1))
         gt_boxes = [box for cls_id, box in load_yolo_boxes(label_path) if cls_id == expected_cls_id]
+        image_shape = cv2.imread(str(image_path))
+        if image_shape is None:
+            errors.append(
+                {
+                    "image": str(image_path),
+                    "expected": expected_class_name,
+                    "predicted_labels": [],
+                    "error_type": "image_read_failed",
+                }
+            )
+            continue
+        h, w = image_shape.shape[:2]
         total += 1
 
         try:
@@ -120,10 +173,8 @@ def main() -> None:
 
         best_iou = 0.0
         best_conf = 0.0
-        found_correct_class = False
         for gt_box in gt_boxes:
             for pred in same_class_preds:
-                h, w = cv2.imread(str(image_path)).shape[:2]
                 pred_norm = [
                     pred["box"][0] / w,
                     pred["box"][1] / h,
@@ -134,9 +185,11 @@ def main() -> None:
                 if current_iou > best_iou:
                     best_iou = current_iou
                     best_conf = pred["conf"]
-                    found_correct_class = True
 
-        if found_correct_class:
+        error_type = classify_error(expected_cls_id, pred_boxes, best_iou, args.match_iou)
+        confusion[error_type] = confusion.get(error_type, 0) + 1
+
+        if best_iou >= args.match_iou:
             class_correct += 1
             matched += 1
             ious.append(best_iou)
@@ -146,7 +199,12 @@ def main() -> None:
                 {
                     "image": str(image_path),
                     "expected": expected_class_name,
+                    "best_same_class_iou": best_iou,
+                    "expected_count": expected_count,
+                    "predicted_count": len(pred_boxes),
                     "predicted_labels": [p["label"] for p in pred_boxes],
+                    "predictions": pred_boxes,
+                    "error_type": error_type,
                 }
             )
 
@@ -159,10 +217,18 @@ def main() -> None:
         "median_iou": float(np.median(ious)) if ious else 0.0,
         "mean_confidence": float(np.mean(confidences)) if confidences else 0.0,
         "median_confidence": float(np.median(confidences)) if confidences else 0.0,
+        "match_iou": args.match_iou,
+        "confusion_breakdown": confusion,
         "confidence_distribution": confidences,
-        "errors": errors[:50],
+        "errors": errors if args.max_errors <= 0 else errors[: args.max_errors],
     }
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    report_text = json.dumps(report, ensure_ascii=False, indent=2)
+    if args.output_json:
+        output_path = Path(args.output_json).expanduser().resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(report_text, encoding="utf-8")
+        print(f"Saved report to: {output_path}")
+    print(report_text)
 
 
 if __name__ == "__main__":
