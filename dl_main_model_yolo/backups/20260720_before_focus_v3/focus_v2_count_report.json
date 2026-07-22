@@ -1,0 +1,2026 @@
+{
+  "settings": {
+    "weights": ".\\dl_main_model_yolo\\runs\\train\\yolo11s_final_split94_focus_v2_ft1280\\weights\\best.pt",
+    "dataset": ".\\dataset\\focus_v2\\eval_yolo",
+    "imgsz": 1280,
+    "conf": 0.1,
+    "iou": 0.7,
+    "match_iou": 0.3,
+    "device": "0",
+    "output_json": ".\\dl_main_model_yolo\\runs\\reports\\focus_v2_count_report.json"
+  },
+  "summary": {
+    "bump": {
+      "gt": 243,
+      "pred": 452,
+      "matched": 125,
+      "count_exact": 5,
+      "images": 77,
+      "recall": 0.51440329218107,
+      "precision": 0.27654867256637167,
+      "count_exact_rate": 0.06493506493506493
+    },
+    "dent": {
+      "gt": 157,
+      "pred": 328,
+      "matched": 88,
+      "count_exact": 6,
+      "images": 79,
+      "recall": 0.5605095541401274,
+      "precision": 0.2682926829268293,
+      "count_exact_rate": 0.0759493670886076
+    },
+    "hair": {
+      "gt": 459,
+      "pred": 707,
+      "matched": 326,
+      "count_exact": 4,
+      "images": 60,
+      "recall": 0.710239651416122,
+      "precision": 0.4611032531824611,
+      "count_exact_rate": 0.06666666666666667
+    }
+  },
+  "images": [
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0001_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 11,
+          "matched": 3
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0002_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 7,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0003_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 6,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0004_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 16,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0005_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 2,
+          "pred": 8,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0006_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 14,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0007_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0008_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 16,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0009_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 15,
+          "matched": 4
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 4,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0013_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 9,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0014_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 2,
+          "pred": 6,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0015_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 2,
+          "pred": 3,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 5,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0016_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 8,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0017_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0018_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 4,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0019_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 10,
+          "matched": 3
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0021_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 7,
+          "matched": 1
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0022_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 7,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0023_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 7,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0024_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0025_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 6,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0026_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0027_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 2,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0028_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 8,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0029_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0030_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0031_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 9,
+          "matched": 2
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0034_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0035_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 11,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0036_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 7,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0037_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 2,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0038_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 12,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0039_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 9,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0040_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0041_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 6,
+          "matched": 4
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0042_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 2,
+          "pred": 2,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0043_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 1,
+          "matched": 1
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0044_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 7,
+          "matched": 2
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0046_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 7,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0047_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0049_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 4,
+          "matched": 2
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0050_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 4,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0051_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 6,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0052_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0053_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 0,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 6,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0054_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 9,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0057_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 4,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0058_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 13,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0059_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 11,
+          "matched": 7
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0060_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 27,
+          "matched": 7
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0061_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0062_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 8,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 2,
+          "pred": 3,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0064_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0065_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 2,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0066_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 6,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0069_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 8,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0070_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 1,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0071_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0072_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 2,
+          "pred": 5,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0074_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0075_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0076_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 3,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0078_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 1,
+          "pred": 8,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0079_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 6,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 3,
+          "pred": 3,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0080_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 4,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0082_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0083_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 8,
+          "pred": 22,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0084_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 1,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0085_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 11,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0086_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0087_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0088_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 3,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 3,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0089_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 3,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0090_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 3,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0091_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 3,
+          "pred": 4,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0092_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0093_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0094_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 3,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0095_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 4,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 3,
+          "pred": 2,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0096_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0097_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0098_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 30,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0099_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 7,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0100_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 5,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 5,
+          "pred": 2,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0102_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 4,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0104_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 4,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 3,
+          "pred": 3,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0105_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 14,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0106_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 2,
+          "pred": 5,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0107_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 4,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0108_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0109_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 4,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0110_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0111_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 9,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 1,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0112_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 6,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0113_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0114_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0117_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 2,
+          "pred": 3,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0118_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 7,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0119_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 3,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0120_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 2,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 2,
+          "pred": 3,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0122_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 9,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0125_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 26,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0126_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 6,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0127_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 1,
+          "pred": 4,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0128_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 8,
+          "pred": 22,
+          "matched": 8
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0129_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 0,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0131_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 2,
+          "pred": 2,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0133_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 30,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0134_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 4,
+          "pred": 5,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0135_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 1,
+          "pred": 2,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0136_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 28,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0137_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 2,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0139_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 3,
+          "pred": 7,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0140_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 26,
+          "matched": 11
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0141_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 6,
+          "pred": 15,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0143_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 6,
+          "pred": 7,
+          "matched": 6
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0145_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 37,
+          "matched": 8
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0146_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0147_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 5,
+          "pred": 8,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0148_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 5,
+          "pred": 27,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0149_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 1,
+          "pred": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0151_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 11,
+          "pred": 12,
+          "matched": 11
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0152_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 41,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0153_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 5,
+          "pred": 12,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0154_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 23,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0155_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 9,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0156_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 15,
+          "matched": 8
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0158_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 2,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0159_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 8,
+          "pred": 9,
+          "matched": 7
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0161_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 25,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0162_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 10,
+          "pred": 11,
+          "matched": 10
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0163_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 4,
+          "pred": 5,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0165_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 24,
+          "matched": 10
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0166_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 20,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0167_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 4,
+          "pred": 5,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0168_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 4,
+          "pred": 8,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0169_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 15,
+          "matched": 10
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0170_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 1,
+          "pred": 5,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0172_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 7,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0175_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 2,
+          "pred": 2,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0176_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 5,
+          "pred": 9,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0178_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 3,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0179_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 11,
+          "pred": 17,
+          "matched": 9
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\train\\0180_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 6,
+          "pred": 6,
+          "matched": 6
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0011_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 15,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0033_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 7,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0045_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 4,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0048_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 2,
+          "matched": 1
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0056_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 1,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0067_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 13,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0073_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 13,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 3,
+          "pred": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0081_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 5,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0101_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 5,
+          "pred": 6,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0124_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 2,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0130_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 4,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0138_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 2,
+          "pred": 4,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0144_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 19,
+          "matched": 8
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0150_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 24,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0164_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 13,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0171_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 2,
+          "pred": 5,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0174_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 20,
+          "matched": 12
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\val\\0177_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 17,
+          "matched": 5
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0010_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 2,
+          "pred": 5,
+          "matched": 1
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0012_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 3,
+          "pred": 0,
+          "matched": 0
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 7,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0020_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 6,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0032_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 5,
+          "pred": 4,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0055_小凸起_有瑕疵干涉图.png",
+      "classes": {
+        "bump": {
+          "gt": 8,
+          "pred": 4,
+          "matched": 2
+        },
+        "dent": {
+          "gt": 0,
+          "pred": 2,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0063_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 2,
+          "pred": 3,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0068_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 1,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0077_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 8,
+          "pred": 12,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0103_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 6,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0115_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 1,
+          "pred": 3,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0116_小凹陷_有瑕疵干涉图.png",
+      "classes": {
+        "dent": {
+          "gt": 3,
+          "pred": 5,
+          "matched": 3
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0121_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 3,
+          "pred": 1,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0123_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 1,
+          "pred": 5,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0132_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 15,
+          "matched": 11
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0142_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 4,
+          "pred": 5,
+          "matched": 4
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0157_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 1,
+          "pred": 3,
+          "matched": 1
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0160_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 2,
+          "pred": 6,
+          "matched": 2
+        }
+      }
+    },
+    {
+      "image": "D:\\physics_compisition_2026\\Physics\\dataset\\focus_v2\\eval_yolo\\images\\test\\0173_头发丝遮挡_有瑕疵干涉图.png",
+      "classes": {
+        "hair": {
+          "gt": 12,
+          "pred": 9,
+          "matched": 1
+        }
+      }
+    }
+  ]
+}

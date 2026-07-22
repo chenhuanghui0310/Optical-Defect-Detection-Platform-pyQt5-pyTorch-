@@ -37,6 +37,11 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Protect thin/local fringe defects from destructive image augmentations.",
     )
+    parser.add_argument(
+        "--fine-tune-preset",
+        action="store_true",
+        help="Use a conservative learning rate when continuing from a trained defect model.",
+    )
     return parser.parse_args()
 
 
@@ -86,6 +91,14 @@ def main() -> None:
             shear=0.0,
             mixup=0.0,
             copy_paste=0.0,
+        )
+    if args.fine_tune_preset:
+        train_kwargs.update(
+            lr0=0.001,
+            lrf=0.01,
+            warmup_epochs=1.0,
+            mosaic=0.0,
+            close_mosaic=0,
         )
     model.train(
         **train_kwargs,

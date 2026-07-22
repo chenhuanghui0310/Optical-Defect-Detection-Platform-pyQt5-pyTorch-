@@ -102,20 +102,17 @@ class SpectrumPlot(FigureCanvas):
         确保 YOLO 模型能正确识别平台保存的图片。
         """
         import matplotlib.pyplot as _plt
-        import numpy as _np
-
         if hasattr(self, '_last_pattern') and self._last_pattern is not None:
             cmap = self.get_color_mapping(self._last_lamda)
             # TODO 2.1：dpi=150，与训练数据 _save_interference_image(dpi=150) 一致
             fig2, ax2 = _plt.subplots(figsize=(5, 5), dpi=150)
             fig2.set_facecolor('#FFFFFF')
+            fig2.subplots_adjust(left=0, right=1, bottom=0, top=1)
             ax2.imshow(self._last_pattern, extent=[-3, 3, -3, 3],
                        cmap=cmap, origin='lower', aspect='equal')
             # 与训练数据集保持一致：无标题、无坐标轴标签、无刻度数值
-            ax2.set_xticks([])
-            ax2.set_yticks([])
-            _plt.tight_layout(pad=0)
-            fig2.savefig(filename, dpi=150, bbox_inches='tight', facecolor='white')
+            ax2.set_axis_off()
+            fig2.savefig(filename, dpi=150, facecolor='white', pad_inches=0)
             _plt.close(fig2)
         else:
             self.fig.savefig(filename, dpi=150, bbox_inches='tight', facecolor='white')

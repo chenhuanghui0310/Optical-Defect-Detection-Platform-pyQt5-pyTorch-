@@ -50,6 +50,8 @@ class SpectrumPlot(FigureCanvas):
 
     def update_plot(self, pattern, title, lamda, is_defect=False):
         """更新单个干涉图像"""
+        self._last_pattern = pattern
+        self._last_lamda = lamda
         # 清除子图
         self.ax.clear()
 
@@ -78,8 +80,23 @@ class SpectrumPlot(FigureCanvas):
         self.draw()
 
     def save_figure(self, filename):
-        """保存图像到文件"""
-        self.fig.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
+        """Save a detector-ready interference image without UI decorations."""
+        if not hasattr(self, '_last_pattern') or self._last_pattern is None:
+            self.fig.savefig(filename, dpi=150, bbox_inches='tight', facecolor='white')
+            return
+
+        fig, ax = plt.subplots(figsize=(6, 3), dpi=150)
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        ax.imshow(
+            self._last_pattern,
+            extent=[0, 30, 0, 15],
+            cmap=self.get_color_mapping(self._last_lamda),
+            origin='lower',
+            aspect='equal',
+        )
+        ax.set_axis_off()
+        fig.savefig(filename, dpi=150, facecolor='white', pad_inches=0)
+        plt.close(fig)
 
 
 class DefectTopography3D(FigureCanvas):

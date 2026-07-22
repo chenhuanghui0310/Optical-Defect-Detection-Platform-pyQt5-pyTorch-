@@ -7,6 +7,7 @@
 import os
 import sys
 import traceback
+import importlib.util
 
 # 强制使用非GUI后端，避免Qt平台插件问题
 import matplotlib
@@ -14,6 +15,7 @@ matplotlib.use('Agg')
 
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 # 配置中文字体显示
 plt.rcParams['font.family'] = ['sans-serif']
@@ -27,13 +29,40 @@ import json
 # 添加模块路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from OpticalDefectExperiment.parameters import SimulationParameters as WedgeParameters
-from 牛顿环瑕疵.parameters import SimulationParameters as NewtonParameters
+def _load_parameter_class(is_newton: bool):
+    """Load the active simulation parameter modules without package-name clashes."""
+    root = Path(__file__).resolve().parent
+    candidates = list(root.glob("*/parameters.py"))
+    for candidate in candidates:
+        source = candidate.read_bytes()
+        candidate_is_newton = b"self.R_mm" in source
+        if candidate_is_newton != is_newton:
+            continue
+        module_name = "dataset_newton_parameters" if is_newton else "dataset_wedge_parameters"
+        spec = importlib.util.spec_from_file_location(module_name, candidate)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.SimulationParameters
+    kind = "Newton" if is_newton else "wedge"
+    raise ImportError(f"Could not locate the {kind} simulation parameters module")
+
+
+WedgeParameters = _load_parameter_class(is_newton=False)
+NewtonParameters = _load_parameter_class(is_newton=True)
 
 class DatasetGenerator:
     """自动化数据集生成器"""
 
-    def __init__(self, output_dir="dataset/images/Auto_Generated", num_samples=100):
+    def __init__(
+        self,
+        output_dir="dataset/images/Auto_Generated",
+        num_samples=100,
+        weak_shape_focus=False,
+        focused_defects=False,
+        focus_count_choices=None,
+    ):
         """
         初始化数据集生成器
 
@@ -44,12 +73,18 @@ class DatasetGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.num_samples = num_samples
+        self.weak_shape_focus = weak_shape_focus
+        self.focus_count_choices = tuple(focus_count_choices or ())
         self.generated_count = 0
         self.defect_types = ["表面划痕", "小凸起", "小凹陷", "灰尘污染", "头发丝遮挡"]
         # 统一命名：凸字统一用"凸"（小凸起、凸起划痕）
         self.sim_types = ["wedge", "newton"] # 新增：仿真类型
 
         # 统计信息
+        self.small_defect_types = self.defect_types[1:3]
+        if focused_defects:
+            self.defect_types = self.small_defect_types + [self.defect_types[-1]]
+
         self.stats = {
             "total": 0,
             "success": 0,
@@ -60,6 +95,20 @@ class DatasetGenerator:
         print(f"[OK] Dataset Generator Initialized")
         print(f"  Output dir: {self.output_dir.absolute()}")
         print(f"  Target samples: {num_samples}")
+
+    def _apply_weak_shape_focus(self, params):
+        """Bias bump/dent samples toward subtle, wide local deformations."""
+        params.bump_count = (
+            int(np.random.choice(self.focus_count_choices))
+            if self.focus_count_choices
+            else np.random.randint(1, 7)
+        )
+        if np.random.random() < 0.45:
+            params.bump_height = 0.02
+            params.bump_radius_mm = float(np.random.choice([2.9, 3.0]))
+        else:
+            params.bump_height = float(np.random.uniform(0.014, 0.030))
+            params.bump_radius_mm = float(np.random.uniform(2.7, 3.2))
 
     def _get_color_mapping(self, wavelength_nm):
         """根据波长获取颜色映射（与平台一致）"""
@@ -457,6 +506,14 @@ class DatasetGenerator:
 
         # 光学参数：覆盖完整可见光范围 380~760nm，确保各颜色均匀采样
         # 分段采样：紫/蓝(380-492) 20%，绿/黄(492-597) 40%，橙/红(597-760) 40%
+        if (
+            self.weak_shape_focus
+            and defect_type not in self.small_defect_types
+            and self.focus_count_choices
+            and hasattr(params, "hair_count")
+        ):
+            params.hair_count = int(np.random.choice(self.focus_count_choices))
+
         color_roll = np.random.random()
         if color_roll < 0.20:
             params.lambda_nm = np.random.randint(380, 492)   # 紫/蓝/青
@@ -485,6 +542,9 @@ class DatasetGenerator:
             params.n1 = np.random.uniform(1.0, 3.0)
             params.n2 = np.random.uniform(1.0, 3.0)
             params.n3 = np.random.uniform(1.0, 3.0)
+
+        if self.weak_shape_focus and defect_type in self.small_defect_types:
+            self._apply_weak_shape_focus(params)
 
         return params
 
@@ -594,6 +654,7 @@ class DatasetGenerator:
 
         fig, ax = plt.subplots(figsize=(7, 3.5) if sim_type == "wedge" else (5, 5), dpi=100)
         fig.set_facecolor('#FFFFFF')
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
 
         if sim_type == "newton":
             extent = [-3, 3, -3, 3]
@@ -601,18 +662,15 @@ class DatasetGenerator:
             extent = [0, 30, 0, 15]
 
         ax.imshow(aug_pattern, extent=extent, cmap=cmap, origin='lower', aspect='equal')
-        ax.set_xticks([])
-        ax.set_yticks([])
+        ax.set_axis_off()
 
         # JPEG 压缩伪影（30% 概率）：先保存为 JPEG 再读回，再保存为 PNG
         if augment and np.random.random() < 0.3:
             import tempfile, cv2 as _cv2
             tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
             tmp.close()
-            plt.tight_layout()
-            plt.savefig(tmp.name, dpi=150, bbox_inches='tight',
-                        facecolor='white', format='jpeg',
-                        pil_kwargs={"quality": np.random.randint(60, 85)})
+            fig.savefig(tmp.name, dpi=150, facecolor='white', pad_inches=0,
+                        format='jpeg', pil_kwargs={"quality": np.random.randint(60, 85)})
             plt.close(fig)
             # 读回再存为 PNG
             img_bgr = _cv2.imread(tmp.name)
@@ -622,8 +680,7 @@ class DatasetGenerator:
                 buf.tofile(str(filepath))
                 return
         else:
-            plt.tight_layout()
-            plt.savefig(filepath, dpi=150, bbox_inches='tight', facecolor='white')
+            fig.savefig(filepath, dpi=150, facecolor='white', pad_inches=0)
             plt.close(fig)
 
     def _save_topography_image(self, thickness_data, filepath, defect_type, sim_type="wedge"):
@@ -762,13 +819,37 @@ def main():
                         help='Output directory (default: dataset/images/Auto_Generated)')
     parser.add_argument('--continue', '-cc', action='store_true',
                         help='Continue from previous generation')
+    parser.add_argument(
+        '--weak-shape-focus',
+        action='store_true',
+        help='Concentrate bump/dent samples around 0.02 um and 2.9/3.0 mm.',
+    )
+    parser.add_argument(
+        '--focused-defects',
+        action='store_true',
+        help='Generate only bump, dent, and hair samples.',
+    )
+    parser.add_argument(
+        '--focus-counts',
+        nargs='+',
+        type=int,
+        default=None,
+        help='Optional target-count choices for focus-mode samples.',
+    )
+    parser.add_argument('--seed', type=int, default=None, help='Optional random seed.')
 
     args = parser.parse_args()
+    if args.seed is not None:
+        np.random.seed(args.seed)
+        random.seed(args.seed)
 
     # 创建生成器并执行
     generator = DatasetGenerator(
         output_dir=args.output,
-        num_samples=args.count
+        num_samples=args.count,
+        weak_shape_focus=args.weak_shape_focus,
+        focused_defects=args.focused_defects,
+        focus_count_choices=args.focus_counts,
     )
 
     stats = generator.generate_dataset()
