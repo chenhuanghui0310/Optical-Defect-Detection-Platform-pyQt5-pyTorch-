@@ -300,177 +300,37 @@ def _safe_mask(mask_data, mask_shape) -> np.ndarray | None:
         return None
 
 
-def _refine_local_bbox_from_diff(
+def _diff_gray_with_bias_correction(
     defect_img: np.ndarray,
-    ideal_img: np.ndarray | None,
-    approx_bbox_xyxy: tuple[int, int, int, int],
-    *,
-    focus_shrink: float = 1.0,
-) -> tuple[int, int, int, int] | None:
-    if ideal_img is None:
-        return None
+    ideal_img: np.ndarray,
+) -> tuple[np.ndarray | None, tuple[int, int] | None]:
+    """Plot-aligned absdiff with global-median bias removal.
 
+    The generator now applies identical augmentations to both images, so the
+    diff should be defect-only.  The median subtraction is a defence in depth
+    against any residual linear (brightness/contrast) bias that could push
+    whole fringe bands above the labelling threshold.
+
+    Returns (diff_gray, (dx1, dy1)) where diff_gray is the blurred difference
+    of the aligned plot regions and (dx1, dy1) is the plot offset inside
+    defect_img; (None, None) when the plots cannot be aligned.
+    """
     dx1, dy1, dx2, dy2 = _find_plot_bbox(defect_img)
     ix1, iy1, ix2, iy2 = _find_plot_bbox(ideal_img)
     defect_plot = defect_img[dy1:dy2, dx1:dx2]
     ideal_plot = ideal_img[iy1:iy2, ix1:ix2]
     if defect_plot.size == 0 or ideal_plot.size == 0:
-        return None
+        return None, None
 
     ideal_plot = cv2.resize(ideal_plot, (defect_plot.shape[1], defect_plot.shape[0]))
-    diff = cv2.absdiff(defect_plot, ideal_plot)
-    diff_gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-    diff_gray = cv2.GaussianBlur(diff_gray, (5, 5), 0)
+    diff = cv2.cvtColor(cv2.absdiff(defect_plot, ideal_plot), cv2.COLOR_BGR2GRAY)
+    diff = cv2.GaussianBlur(diff, (5, 5), 0)
 
-    ax1, ay1, ax2, ay2 = approx_bbox_xyxy
-    ax1 = max(dx1, ax1)
-    ay1 = max(dy1, ay1)
-    ax2 = min(dx2, ax2)
-    ay2 = min(dy2, ay2)
-    if ax2 <= ax1 or ay2 <= ay1:
-        return None
+    bias = float(np.median(diff))
+    if bias > 0.5:
+        diff = np.clip(diff.astype(np.float32) - bias, 0, 255).astype(np.uint8)
 
-    lx1 = max(0, ax1 - dx1)
-    ly1 = max(0, ay1 - dy1)
-    lx2 = min(diff_gray.shape[1], ax2 - dx1)
-    ly2 = min(diff_gray.shape[0], ay2 - dy1)
-    roi = diff_gray[ly1:ly2, lx1:lx2]
-    if roi.size == 0:
-        return None
-
-    max_val = float(np.max(roi))
-    mean_val = float(np.mean(roi))
-    if max_val < 4.0:
-        return None
-
-    thresh_val = max(4, int(min(max_val * 0.55, mean_val + max(6.0, (max_val - mean_val) * 0.45))))
-    _, binary = cv2.threshold(roi, thresh_val, 255, cv2.THRESH_BINARY)
-
-    kernel_size = max(3, int(round(min(roi.shape[:2]) * 0.08)))
-    if kernel_size % 2 == 0:
-        kernel_size += 1
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-    binary = cv2.dilate(binary, kernel, iterations=1)
-
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None
-
-    roi_cx = (lx2 - lx1) / 2.0
-    roi_cy = (ly2 - ly1) / 2.0
-    best_rect = None
-    best_score = -1.0
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour)
-        area = w * h
-        if area < 25:
-            continue
-        cx = x + w / 2.0
-        cy = y + h / 2.0
-        dist_score = 1.0 / (1.0 + np.hypot(cx - roi_cx, cy - roi_cy))
-        score = area * dist_score
-        if score > best_score:
-            best_score = score
-            best_rect = (x, y, w, h)
-
-    if best_rect is None:
-        return None
-
-    x, y, w, h = best_rect
-    if 0.0 < focus_shrink < 1.0:
-        new_w = max(3, int(round(w * focus_shrink)))
-        new_h = max(3, int(round(h * focus_shrink)))
-        cx = x + w / 2.0
-        cy = y + h / 2.0
-        x = int(round(cx - new_w / 2.0))
-        y = int(round(cy - new_h / 2.0))
-        w = new_w
-        h = new_h
-    pad = max(2, int(round(max(w, h) * 0.12)))
-    bx1 = max(dx1, dx1 + lx1 + x - pad)
-    by1 = max(dy1, dy1 + ly1 + y - pad)
-    bx2 = min(dx2, dx1 + lx1 + x + w + pad)
-    by2 = min(dy2, dy1 + ly1 + y + h + pad)
-    if bx2 <= bx1 or by2 <= by1:
-        return None
-    return bx1, by1, bx2, by2
-
-
-def _extract_small_target_boxes_from_diff(
-    defect_img: np.ndarray,
-    ideal_img: np.ndarray | None,
-    *,
-    expected_count: int,
-    focus_shrink: float,
-    min_area: int,
-    max_boxes: int | None = None,
-) -> list[tuple[int, int, int, int]]:
-    if ideal_img is None:
-        return []
-
-    dx1, dy1, dx2, dy2 = _find_plot_bbox(defect_img)
-    ix1, iy1, ix2, iy2 = _find_plot_bbox(ideal_img)
-    defect_plot = defect_img[dy1:dy2, dx1:dx2]
-    ideal_plot = ideal_img[iy1:iy2, ix1:ix2]
-    if defect_plot.size == 0 or ideal_plot.size == 0:
-        return []
-
-    ideal_plot = cv2.resize(ideal_plot, (defect_plot.shape[1], defect_plot.shape[0]))
-    diff = cv2.absdiff(defect_plot, ideal_plot)
-    diff_gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-    diff_gray = cv2.GaussianBlur(diff_gray, (5, 5), 0)
-
-    max_val = float(np.max(diff_gray))
-    mean_val = float(np.mean(diff_gray))
-    if max_val < 4.0:
-        return []
-
-    thresh_val = max(4, int(min(max_val * 0.52, mean_val + max(6.0, (max_val - mean_val) * 0.42))))
-    _, binary = cv2.threshold(diff_gray, thresh_val, 255, cv2.THRESH_BINARY)
-
-    kernel_size = max(3, int(round(min(diff_gray.shape[:2]) * 0.01)))
-    if kernel_size % 2 == 0:
-        kernel_size += 1
-    kernel = np.ones((kernel_size, kernel_size), np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return []
-
-    candidates: list[tuple[float, tuple[int, int, int, int]]] = []
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour)
-        area = w * h
-        if area < min_area:
-            continue
-        roi = diff_gray[y : y + h, x : x + w]
-        if roi.size == 0:
-            continue
-        score = float(np.mean(roi)) * float(np.sqrt(area))
-        bx1 = dx1 + x
-        by1 = dy1 + y
-        bx2 = dx1 + x + w
-        by2 = dy1 + y + h
-        candidates.append((score, (bx1, by1, bx2, by2)))
-
-    if not candidates:
-        return []
-
-    candidates.sort(key=lambda item: item[0], reverse=True)
-
-    boxes: list[tuple[int, int, int, int]] = []
-    img_h, img_w = defect_img.shape[:2]
-    for _score, box in candidates:
-        focused = _focus_box(img_w, img_h, box, shrink=focus_shrink, min_size=8)
-        refined = _refine_local_bbox_from_diff(defect_img, ideal_img, focused, focus_shrink=focus_shrink)
-        final_box = refined if refined is not None else focused
-        boxes.append(final_box)
-        if max_boxes is not None and len(boxes) >= max_boxes:
-            break
-    return boxes
+    return diff, (dx1, dy1)
 
 
 def preprocess_real_image(img: np.ndarray) -> np.ndarray:
@@ -521,45 +381,70 @@ def _bbox_line_from_xyxy(cls_id: int, img_w: int, img_h: int, box: tuple[int, in
     return f"{cls_id} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}"
 
 
-def _safe_bump_radius_m(meta: dict, field_x: float, field_y: float) -> float:
-    raw = meta.get("bump_radius_mm", 2.4)
+def _parse_local_target_geometry(meta: dict) -> tuple[int, list[list[float]]]:
+    """Read strict generator-owned geometry for bump/dent labels.
+
+    A fallback radius, a fixed default position, or a diff-only guess would
+    silently create wrong supervision.  New datasets must therefore carry the
+    versioned target geometry written by auto_dataset_generator.py.
+    """
+    if meta.get("target_geometry_version") != 3:
+        raise ValueError("missing target_geometry_version=3; regenerate the source dataset")
+
     try:
-        radius_mm = float(raw)
-    except (TypeError, ValueError):
-        radius_mm = 2.4
+        target_count = int(meta["target_count"])
+        bump_count = int(meta["bump_count"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("target_count and bump_count are required integers") from exc
+    if target_count <= 0 or target_count != bump_count:
+        raise ValueError(
+            f"target_count ({target_count}) does not match bump_count ({bump_count})"
+        )
 
-    if not np.isfinite(radius_mm) or radius_mm <= 0 or radius_mm >= 100:
-        radius_mm = 2.4
+    boxes = meta.get("target_bboxes_xyxy_normalized")
+    positions = meta.get("target_positions_mm")
+    if not isinstance(boxes, list) or len(boxes) != target_count:
+        raise ValueError(
+            "target_bboxes_xyxy_normalized count does not match target_count"
+        )
+    if not isinstance(positions, list) or len(positions) != target_count:
+        raise ValueError("target_positions_mm count does not match target_count")
 
-    radius_m = max(0.00005, radius_mm * 1e-3)
-    max_reasonable = min(field_x, field_y) * 0.18
-    return float(np.clip(radius_m, 0.00005, max_reasonable))
+    parsed_boxes: list[list[float]] = []
+    for index, raw_box in enumerate(boxes):
+        if not isinstance(raw_box, (list, tuple)) or len(raw_box) != 4:
+            raise ValueError(f"target box {index} must contain four normalized coordinates")
+        try:
+            x1, y1, x2, y2 = (float(value) for value in raw_box)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"target box {index} contains a non-numeric coordinate") from exc
+        if not all(np.isfinite(value) for value in (x1, y1, x2, y2)):
+            raise ValueError(f"target box {index} contains a non-finite coordinate")
+        if not (0.0 <= x1 < x2 <= 1.0 and 0.0 <= y1 < y2 <= 1.0):
+            raise ValueError(f"target box {index} is outside [0,1] or has non-positive area")
+        parsed_boxes.append([x1, y1, x2, y2])
+
+    try:
+        target_radius_mm = float(meta["target_radius_mm"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("target_radius_mm is required") from exc
+    if not np.isfinite(target_radius_mm) or target_radius_mm <= 0:
+        raise ValueError("target_radius_mm must be a positive finite number")
+    try:
+        target_box_radius_scale = float(meta["target_box_radius_scale"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("target_box_radius_scale is required") from exc
+    if not np.isfinite(target_box_radius_scale) or not 0.0 < target_box_radius_scale <= 1.0:
+        raise ValueError("target_box_radius_scale must be in (0,1]")
+
+    return target_count, parsed_boxes
 
 
-def _focus_box(
-    img_w: int,
-    img_h: int,
-    box: tuple[int, int, int, int],
-    *,
-    shrink: float,
-    min_size: int,
-) -> tuple[int, int, int, int]:
+def _yolo_line_from_normalized_box(cls_id: int, box: list[float]) -> str:
     x1, y1, x2, y2 = box
-    w = max(1, x2 - x1)
-    h = max(1, y2 - y1)
-    cx = (x1 + x2) / 2.0
-    cy = (y1 + y2) / 2.0
-    new_w = max(min_size, int(round(w * shrink)))
-    new_h = max(min_size, int(round(h * shrink)))
-    nx1 = int(round(cx - new_w / 2.0))
-    ny1 = int(round(cy - new_h / 2.0))
-    nx2 = int(round(cx + new_w / 2.0))
-    ny2 = int(round(cy + new_h / 2.0))
-    nx1 = max(0, min(img_w - 1, nx1))
-    ny1 = max(0, min(img_h - 1, ny1))
-    nx2 = max(nx1 + 1, min(img_w, nx2))
-    ny2 = max(ny1 + 1, min(img_h, ny2))
-    return nx1, ny1, nx2, ny2
+    xc = (x1 + x2) / 2.0
+    yc = (y1 + y2) / 2.0
+    return f"{cls_id} {xc:.6f} {yc:.6f} {x2 - x1:.6f} {y2 - y1:.6f}"
 
 
 def generate_analytic_labels(
@@ -569,85 +454,25 @@ def generate_analytic_labels(
     cls_id: int,
     label_path: Path,
 ) -> None:
+    if cls_id in (1, 2):
+        target_count, target_boxes = _parse_local_target_geometry(meta)
+    else:
+        target_count, target_boxes = 0, []
+
     img = _load_image_unicode(defect_img_path)
     if img is None:
         write_weak_label(label_path, cls_id)
         return
 
-    ideal_img = _load_image_unicode(ideal_img_path) if ideal_img_path and ideal_img_path.exists() else None
     img_h, img_w = img.shape[:2]
-    sim_type = meta.get("sim_type", "wedge")
     labels: list[str] = []
 
     if cls_id in (1, 2):
-        field_x = 0.006 if sim_type == "newton" else 0.030
-        field_y = 0.006 if sim_type == "newton" else 0.015
-        bump_count = int(meta.get("bump_count", 1))
-        radius_m = _safe_bump_radius_m(meta, field_x, field_y)
-        position_mode = str(meta.get("bump_position_mode", "")).strip()
-        positions = meta.get("generated_bump_positions", [])[:bump_count]
-        if not positions:
-            positions = meta.get("fixed_bump_positions", [])[:bump_count]
-
-        use_diff_only = ("闅忔満" in position_mode or "随机" in position_mode) and not meta.get("generated_bump_positions")
-        if use_diff_only:
-            candidate_boxes = _extract_small_target_boxes_from_diff(
-                img,
-                ideal_img,
-                expected_count=bump_count,
-                focus_shrink=0.72 if cls_id == 1 else 0.64,
-                min_area=18 if sim_type == "newton" else 24,
-                max_boxes=max(12, bump_count + 2),
+        labels = [_yolo_line_from_normalized_box(cls_id, box) for box in target_boxes]
+        if len(labels) != target_count:
+            raise ValueError(
+                f"generated {len(labels)} local labels, expected {target_count}"
             )
-            # Full-image diff is only trustworthy when the candidate count is close to the expected defect count.
-            candidate_count = len(candidate_boxes)
-            allow_diff_only = (
-                candidate_count >= max(1, int(round(bump_count * 0.6)))
-                and candidate_count <= max(bump_count + 1, int(round(bump_count * 1.6)))
-                and bump_count <= 4
-            )
-            if allow_diff_only:
-                for final_box in candidate_boxes[:bump_count]:
-                    line = _bbox_line_from_xyxy(cls_id, img_w, img_h, final_box)
-                    if line:
-                        labels.append(line)
-
-        if not labels:
-            for cx_m, cy_m in positions:
-                cx_m = float(cx_m)
-                cy_m = float(cy_m)
-                if sim_type == "newton":
-                    px = (cx_m / field_x) + 0.5
-                    py = 1.0 - ((cy_m / field_y) + 0.5)
-                else:
-                    px = cx_m / field_x
-                    py = 1.0 - (cy_m / field_y)
-                pw = float(np.clip((2 * radius_m) / field_x, 0.01, 1.0))
-                ph = float(np.clip((2 * radius_m) / field_y, 0.01, 1.0))
-                px = float(np.clip(px, pw / 2, 1 - pw / 2))
-                py = float(np.clip(py, ph / 2, 1 - ph / 2))
-
-                bx1 = int(round((px - pw / 2) * img_w))
-                by1 = int(round((py - ph / 2) * img_h))
-                bx2 = int(round((px + pw / 2) * img_w))
-                by2 = int(round((py + ph / 2) * img_h))
-                approx_box = _focus_box(
-                    img_w,
-                    img_h,
-                    (bx1, by1, bx2, by2),
-                    shrink=0.72 if sim_type == "newton" else 0.68,
-                    min_size=8 if sim_type == "newton" else 10,
-                )
-                refined = _refine_local_bbox_from_diff(
-                    img,
-                    ideal_img,
-                    approx_box,
-                    focus_shrink=0.78 if cls_id == 1 else 0.70,
-                )
-                final_box = refined if refined is not None else approx_box
-                line = _bbox_line_from_xyxy(cls_id, img_w, img_h, final_box)
-                if line:
-                    labels.append(line)
 
     elif cls_id == 4:
         hair_mask = _safe_mask(meta.get("hair_mask"), meta.get("hair_mask_shape"))
@@ -696,23 +521,17 @@ def generate_yolo_labels_diff(
             write_weak_label(label_path, cls_id)
             return
 
-        x1_d, y1_d, x2_d, y2_d = _find_plot_bbox(defect_img)
-        x1_i, y1_i, x2_i, y2_i = _find_plot_bbox(ideal_img)
-        defect_plot = defect_img[y1_d:y2_d, x1_d:x2_d]
-        ideal_plot = ideal_img[y1_i:y2_i, x1_i:x2_i]
-        if defect_plot.size == 0 or ideal_plot.size == 0:
+        diff_gray, plot_offset = _diff_gray_with_bias_correction(defect_img, ideal_img)
+        if diff_gray is None:
             write_weak_label(label_path, cls_id)
             return
-
-        ideal_plot = cv2.resize(ideal_plot, (defect_plot.shape[1], defect_plot.shape[0]))
-        diff = cv2.absdiff(defect_plot, ideal_plot)
-        gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+        dx1, dy1 = plot_offset
 
         # Hair is a thin dark occlusion.  Use a stricter difference threshold than
         # dust, while preserving its disconnected curve segments for local boxes.
-        thresh_val = 3 if cls_id == 3 else (12 if cls_id == 4 else 8)
-        _, thresh = cv2.threshold(gray, thresh_val, 255, cv2.THRESH_BINARY)
+        # 阈值下限统一提升到 8/12：低于此值的差分多数为残留噪声而非可见缺陷。
+        thresh_val = 8 if cls_id == 3 else 12
+        _, thresh = cv2.threshold(diff_gray, thresh_val, 255, cv2.THRESH_BINARY)
 
         img_short = min(defect_img.shape[:2])
         if cls_id == 4:
@@ -736,8 +555,8 @@ def generate_yolo_labels_diff(
             min_area = 24 if cls_id == 4 else 100
             if w <= 3 or h <= 3 or w * h <= min_area:
                 continue
-            x_full = x + x1_d
-            y_full = y + y1_d
+            x_full = x + dx1
+            y_full = y + dy1
             padding = max(8, int(img_short * 0.01))
             box = (
                 max(0, x_full - padding),
@@ -820,11 +639,28 @@ def copy_and_label(
         elif cls_id in (0, 3, 4):
             generate_yolo_labels_diff(img_path, ideal_path, cls_id, out_lbl, meta)
         else:
-            generate_analytic_labels(img_path, ideal_path, meta, cls_id, out_lbl)
+            try:
+                generate_analytic_labels(img_path, ideal_path, meta, cls_id, out_lbl)
+            except (RuntimeError, ValueError, TypeError, KeyError) as exc:
+                raise RuntimeError(
+                    f"Invalid local-defect metadata for {img_path.name}: {exc}"
+                ) from exc
 
         # Never turn an unlocalised defect into a negative or a full-image box.
         # Such samples are not usable for object detection and must not reach YOLO.
         lines = _deduplicate_yolo_lines(out_lbl.read_text(encoding="utf-8").splitlines())
+        if cls_id in (1, 2):
+            expected_count, _ = _parse_local_target_geometry(meta)
+            if len(lines) != expected_count:
+                raise RuntimeError(
+                    f"Local label count mismatch for {img_path.name}: "
+                    f"labels={len(lines)}, expected={expected_count}"
+                )
+            if max_boxes_per_image > 0 and expected_count > max_boxes_per_image:
+                raise ValueError(
+                    f"max-boxes-per-image={max_boxes_per_image} is below local target count "
+                    f"{expected_count} for {img_path.name}"
+                )
         lines = _limit_boxes_per_class(lines, max_boxes_per_image)
         if not lines:
             out_lbl.unlink(missing_ok=True)
@@ -888,8 +724,12 @@ def write_small_target_manifest(
         if cls_id not in (1, 2):
             continue
         meta = _load_meta_for_image(img_path)
-        bump_height = float(meta.get("bump_height", 999))
-        bump_radius_mm = float(meta.get("bump_radius_mm", 999))
+        expected_count, target_boxes = _parse_local_target_geometry(meta)
+        try:
+            bump_height = float(meta["bump_height"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"bump_height is required for {img_path.name}") from exc
+        bump_radius_mm = float(meta["target_radius_mm"])
         if bump_height > 0.08 and bump_radius_mm > 3.0:
             continue
         split = "train" if idx in train_ids else ("val" if idx in val_ids else "test")
@@ -907,7 +747,9 @@ def write_small_target_manifest(
                 "sim_type": meta.get("sim_type", sample_sim_type),
                 "bump_height": bump_height,
                 "bump_radius_mm": bump_radius_mm,
-                "expected_count": int(meta.get("bump_count", 1)),
+                "expected_count": expected_count,
+                "target_positions_mm": meta["target_positions_mm"],
+                "target_bboxes_xyxy_normalized": target_boxes,
             }
         )
     (output_dir / "metadata" / "small_target_eval.json").write_text(

@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
     QAbstractItemView,
@@ -39,8 +39,8 @@ from defect_ai_module import DefectAIService
 
 BASE_DIR = Path(__file__).resolve().parent
 IMAGE_FILTER = "图像文件 (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)"
-DEFAULT_CONFIDENCE = 0.30
-DEFAULT_IOU = 0.50
+DEFAULT_CONFIDENCE = 0.25
+DEFAULT_IOU = 0.70
 
 
 def inference_device() -> str:
@@ -51,7 +51,8 @@ def inference_device() -> str:
 def preferred_model_path() -> Path:
     """返回项目内优先使用的训练权重，并兼容旧版目录结构。"""
     candidates = [
-        BASE_DIR / "dl_main_model_yolo" / "runs" / "train" / "yolo11s_final_split94_focus_v3_scratchfix1280" / "weights" / "best.pt",
+        BASE_DIR / "dl_main_model_yolo" / "runs" / "train" / "yolo11s_v3_1280" / "weights" / "best.pt",
+        BASE_DIR / "dl_main_model_yolo" / "runs" / "train" / "yolo11s_final_split94_focus_v4_mixed1280" / "weights" / "best.pt",
         BASE_DIR / "dl_main_model_yolo\\runs\\train\\yolo11s_final_split94_focus_v2_ft1280\\weights\\best.pt",
         BASE_DIR / "dl_main_model_yolo" / "runs" / "train" / "yolo11s_final_split94" / "weights" / "best.pt",
         BASE_DIR / "dl_main_model_yolo" / "runs" / "train" / "yolo11s_final_split94_smalltarget_ft1280" / "weights" / "best.pt",
@@ -81,7 +82,9 @@ class DetectionWorker(QThread):
                 conf=DEFAULT_CONFIDENCE,
                 iou=DEFAULT_IOU,
                 device=inference_device(),
-                save_visualization=True,
+                # The GUI renders an in-memory preview after inference.  Do
+                # not create a sibling "*_检测结果.png" merely by detecting.
+                save_visualization=False,
                 crop_plot_area=False,
             )
             self.completed.emit(result)
@@ -96,6 +99,7 @@ class ImagePanel(QFrame):
         super().__init__(parent)
         self.setObjectName("imagePanel")
         self._image_path = ""
+        self._source_pixmap = QPixmap()
         self._title = title
 
         layout = QVBoxLayout(self)
@@ -115,25 +119,28 @@ class ImagePanel(QFrame):
 
     def set_image(self, image_path: str) -> None:
         self._image_path = image_path
+        self._source_pixmap = QPixmap(image_path)
+        self._refresh_pixmap()
+
+    def set_pixmap(self, pixmap: QPixmap) -> None:
+        self._image_path = ""
+        self._source_pixmap = pixmap
         self._refresh_pixmap()
 
     def clear_image(self, text: str) -> None:
         self._image_path = ""
+        self._source_pixmap = QPixmap()
         self.canvas.setPixmap(QPixmap())
         self.canvas.setText(text)
 
     def _refresh_pixmap(self) -> None:
-        if not self._image_path:
-            return
-        pixmap = QPixmap(self._image_path)
-        if pixmap.isNull():
-            self.canvas.setText("无法加载此图像")
+        if self._source_pixmap.isNull():
             return
         margins = self.canvas.contentsMargins()
         available_width = max(1, self.canvas.width() - margins.left() - margins.right() - 8)
         available_height = max(1, self.canvas.height() - margins.top() - margins.bottom() - 8)
         self.canvas.setPixmap(
-            pixmap.scaled(available_width, available_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self._source_pixmap.scaled(available_width, available_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         )
         self.canvas.setText("")
 
@@ -149,6 +156,7 @@ class OpticalDefectDetectionWindow(QMainWindow):
         super().__init__()
         self.image_path = ""
         self.result_image_path = ""
+        self.result_preview = QPixmap()
         self.model_path = str(preferred_model_path())
         self.worker: DetectionWorker | None = None
 
@@ -360,6 +368,7 @@ class OpticalDefectDetectionWindow(QMainWindow):
             return
         self.image_path = path
         self.result_image_path = ""
+        self.result_preview = QPixmap()
         self.original_panel.set_image(path)
         self.result_panel.clear_image("点击“开始瑕疵检测”\n生成带定位框的结果图")
         self.result_table.setRowCount(0)
@@ -393,11 +402,9 @@ class OpticalDefectDetectionWindow(QMainWindow):
 
     def _on_detection_completed(self, result) -> None:
         predictions = result.predictions
-        self.result_image_path = result.output_image
-        if self.result_image_path and Path(self.result_image_path).exists():
-            self.result_panel.set_image(self.result_image_path)
-        else:
-            self.result_panel.set_image(self.image_path)
+        self.result_image_path = ""
+        self.result_preview = self._render_result_preview(predictions)
+        self.result_panel.set_pixmap(self.result_preview)
         self._fill_result_table(predictions)
         if predictions:
             self.result_summary.setText(f"发现 {len(predictions)} 处疑似瑕疵")
@@ -406,6 +413,34 @@ class OpticalDefectDetectionWindow(QMainWindow):
             self.result_summary.setText("未发现明显瑕疵")
             self.statusBar().showMessage("检测完成 · 未发现明显瑕疵")
         self._set_ready_state()
+
+    def _render_result_preview(self, predictions) -> QPixmap:
+        """Draw detection boxes in memory; disk I/O happens only on Save."""
+        preview = QPixmap(self.image_path).copy()
+        if preview.isNull():
+            return preview
+        colors = {
+            "scratch": QColor(255, 165, 0),
+            "bump": QColor(0, 255, 0),
+            "dent": QColor(0, 120, 255),
+            "dust": QColor(255, 255, 0),
+            "hair": QColor(255, 0, 255),
+        }
+        painter = QPainter(preview)
+        painter.setRenderHint(QPainter.Antialiasing)
+        font = QFont("Microsoft YaHei", 10)
+        painter.setFont(font)
+        for item in predictions:
+            if not item.bbox_xyxy:
+                continue
+            x1, y1, x2, y2 = [round(value) for value in item.bbox_xyxy]
+            color = colors.get(item.label, QColor(0, 200, 200))
+            painter.setPen(QPen(color, 2))
+            painter.drawRect(x1, y1, max(1, x2 - x1), max(1, y2 - y1))
+            painter.setPen(QPen(color, 1))
+            painter.drawText(x1 + 3, max(14, y1 - 4), f"{item.label_cn} {item.confidence:.2f}")
+        painter.end()
+        return preview
 
     def _fill_result_table(self, predictions) -> None:
         self.result_table.setRowCount(len(predictions))
@@ -436,7 +471,7 @@ class OpticalDefectDetectionWindow(QMainWindow):
         self.detect_btn.setEnabled(bool(self.image_path))
 
     def save_result(self) -> None:
-        if not self.result_image_path or not Path(self.result_image_path).exists():
+        if self.result_preview.isNull():
             QMessageBox.information(self, "暂无结果", "请先完成一次检测，再保存带定位框的结果图。")
             return
         target, _ = QFileDialog.getSaveFileName(
@@ -448,8 +483,8 @@ class OpticalDefectDetectionWindow(QMainWindow):
         if not target:
             return
         try:
-            import shutil
-            shutil.copyfile(self.result_image_path, target)
+            if not self.result_preview.save(target):
+                raise OSError("无法写入结果图，请检查文件扩展名和目标目录权限。")
             self.statusBar().showMessage(f"已保存检测结果图 · {Path(target).name}")
         except OSError as exc:
             QMessageBox.warning(self, "保存失败", str(exc))
