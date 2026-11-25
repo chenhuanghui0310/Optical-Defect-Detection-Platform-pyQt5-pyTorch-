@@ -25,6 +25,8 @@ dl_main_model_yolo/runs/
 # 打包文件
 build/
 dist/
+dist_v3_cpu/
+*.exe
 *.spec
 
 # IDE 配置文件

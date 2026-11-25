@@ -40,9 +40,9 @@ python quick_start_generation.py
 
 | 文件 | 说明 | 何时阅读 |
 |-----|------|--------|
-| **QUICK_REFERENCE.md** | 快速参考卡（最实用） | 第一次使用 |
+| **文档资料/QUICK_REFERENCE.md** | 快速参考卡（最实用） | 第一次使用 |
 | **DATASET_GENERATION_GUIDE.md** | 完整使用指南 | 需要详细说明时 |
-| **PROJECT_SUMMARY.md** | 项目总结和方案 | 想了解整体规划 |
+| **文档资料/PROJECT_SUMMARY.md** | 项目总结和方案 | 想了解整体规划 |
 
 ### 核心脚本
 
@@ -268,9 +268,9 @@ cd d:\2026物理竞赛\Physics
 
 ## 🤝 需要帮助？
 
-1. **查看快速参考** → `QUICK_REFERENCE.md`
+1. **查看快速参考** → `文档资料/QUICK_REFERENCE.md`
 2. **查看详细指南** → `DATASET_GENERATION_GUIDE.md`
-3. **查看项目总结** → `PROJECT_SUMMARY.md`
+3. **查看项目总结** → `文档资料/PROJECT_SUMMARY.md`
 4. **查看代码注释** → 源代码内有详细注释
 
 ---
@@ -291,7 +291,7 @@ cd d:\2026物理竞赛\Physics
 ## ✅ 使用清单
 
 - [ ] 阅读本文件 (README.md)
-- [ ] 查看快速参考 (QUICK_REFERENCE.md)
+- [ ] 查看快速参考 (文档资料/QUICK_REFERENCE.md)
 - [ ] 激活虚拟环境
 - [ ] 运行 `python quick_start_generation.py`
 - [ ] 检查生成的数据
